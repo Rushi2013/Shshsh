@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-list"></use></svg></span>
+    <div>
+      <h1 class="h2">Beneficiary records</h1>
+      <p class="card-sub">
+        {% if active_session %}
+          {{ active_session.original_filename }} · {{ total }} record(s) for this filter
+        {% else %}
+          No file uploaded yet
+        {% endif %}
+      </p>
+    </div>
+    <div class="card-actions">
+      {% if total %}
+      <button class="btn btn-sm" id="exportCsv"><svg class="icon"><use href="#i-download"></use></svg> CSV</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if active_session %}
+  <form class="grid grid-2" method="get" action="{{ url_for('records_page') }}">
+    <div class="field">
+      <label for="q">Search</label>
+      <input class="input" id="q" name="q" value="{{ search }}" placeholder="Name, beneficiary ID, mobile, vaccine">
+    </div>
+    <div class="field">
+      <label for="status">Status</label>
+      <select class="select" id="status" name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for item in statuses %}
+        <option value="{{ item }}" {{ 'selected' if status == item }}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <input type="hidden" name="page" value="1">
+    <div class="row">
+      <button class="btn btn-sm btn-primary" type="submit"><svg class="icon"><use href="#i-search"></use></svg> Search</button>
+      <a class="btn btn-sm btn-ghost" href="{{ url_for('records_page') }}">Clear</a>
+    </div>
+  </form>
+
+  <div class="segment" style="margin-top:8px">
+    <a class="{{ 'is-active' if not status }}" href="{{ url_for('records_page', q=search) }}">All</a>
+    <a class="{{ 'is-active' if status == 'NEEDS REVIEW' }}" href="{{ url_for('records_page', status='NEEDS REVIEW', q=search) }}">Needs review</a>
+    <a class="{{ 'is-active' if status == 'MATCHED' }}" href="{{ url_for('records_page', status='MATCHED', q=search) }}">Matched</a>
+    <a class="{{ 'is-active' if status == 'APPROVED' }}" href="{{ url_for('records_page', status='APPROVED', q=search) }}">Approved</a>
+    <a class="{{ 'is-active' if status == 'COMPLETED' }}" href="{{ url_for('records_page', status='COMPLETED', q=search) }}">Completed</a>
+    <a class="{{ 'is-active' if status == 'SAVE STATUS UNKNOWN' }}" href="{{ url_for('records_page', status='SAVE STATUS UNKNOWN', q=search) }}">Unknown</a>
+    <a class="{{ 'is-active' if status == 'FAILED' }}" href="{{ url_for('records_page', status='FAILED', q=search) }}">Failed</a>
+  </div>
+  {% endif %}
+</section>
+
+{% if not active_session %}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="empty">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-upload"></use></svg></div>
+    <h3>No records yet</h3>
+    <p>Upload an Excel file first — the records list will then show every beneficiary row.</p>
+    <a class="btn btn-primary" href="{{ url_for('upload_page') }}">Upload Excel</a>
+  </div>
+</section>
+{% elif not records %}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="empty">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-search"></use></svg></div>
+    <h3>No record matches this filter</h3>
+    <p>Try another status or clear the search box.</p>
+    <a class="btn" href="{{ url_for('records_page') }}">Clear filter</a>
+  </div>
+</section>
+{% else %}
+<section class="reclist" style="margin-top:var(--gap)">
+  {% for record in records %}
+  <a class="rec" href="{{ url_for('record_detail', record_id=record.id) }}">
+    <span class="rec-order">{{ record.row_number }}</span>
+    <span class="rec-body">
+      <span class="rec-title">
+        <strong>{{ record.name or 'Name missing' }}</strong>
+        <span class="badge s-{{ record.status|slug }}">{{ record.status }}</span>
+      </span>
+      <span class="rec-meta">
+        <span>DOB: {{ record.dob|nice_date or '—' }}</span>
+        <span>{{ record.vaccine_name or 'Vaccine missing' }}</span>
+        <span>Dose {{ record.dose_number or '—' }}</span>
+        <span>{{ record.vaccination_date|nice_date or 'Date missing' }}</span>
+      </span>
+      {% if record.match_confidence %}
+      <span class="rec-meta"><span>Match: {{ (record.match_confidence * 100)|round(0)|int }}%</span>
+        {% if record.matched_official_id %}<span>Register ID #{{ record.matched_official_id }}</span>{% endif %}
+      </span>
+      {% endif %}
+      {% if record.error_message %}
+      <span class="rec-warn"><svg class="icon"><use href="#i-alert"></use></svg> {{ record.error_message[:110] }}</span>
+      {% endif %}
+      {% if record.warnings_json and record.warnings_json not in ('[]', 'null', '') %}
+      <span class="rec-warn"><svg class="icon"><use href="#i-alert"></use></svg> {{ record.warnings_json.count('"code"') }} validation note(s) — open the record to read them</span>
+      {% endif %}
+    </span>
+    <svg class="icon muted"><use href="#i-arrow-right"></use></svg>
+  </a>
+  {% endfor %}
+</section>
+
+<div class="pagination">
+  <span class="tiny muted">Page {{ page_number }} of {{ pages }} · showing {{ records|length }} of {{ total }}</span>
+  <span class="row-tight">
+    {% if page_number > 1 %}
+    <a class="btn btn-sm" href="{{ url_for('records_page', status=status, q=search, page=page_number-1) }}">
+      <svg class="icon"><use href="#i-arrow-left"></use></svg> Previous
+    </a>
+    {% endif %}
+    {% if page_number < pages %}
+    <a class="btn btn-sm" href="{{ url_for('records_page', status=status, q=search, page=page_number+1) }}">
+      Next <svg class="icon"><use href="#i-arrow-right"></use></svg>
+    </a>
+    {% endif %}
+  </span>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const exportBtn = document.getElementById("exportCsv");
+  if (exportBtn) {
+    UWIN.onClick(exportBtn, async () => {
+      const data = await UWIN.api("/api/reports/export", {
+        method: "POST",
+        body: { session_id: {{ active_session.id if active_session else 'null' }}, status: "{{ status }}", search: "{{ search }}" },
+      });
+      if (data.ok) {
+        UWIN.toast("success", data.message + " Opening download…", "CSV ready");
+        window.location.href = "/reports/download/" + encodeURIComponent(data.filename);
+      }
+    }, "Preparing…");
+  }
+</script>
+{% endblock %}

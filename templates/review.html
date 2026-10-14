@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if not record %}
+<section class="card">
+  <div class="empty">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-check-circle"></use></svg></div>
+    <h3>Nothing to review right now</h3>
+    <p>Every record in this file has already been handled. Upload a new file or reopen a skipped record.</p>
+    <div class="row" style="justify-content:center">
+      <a class="btn btn-primary" href="{{ url_for('upload_page') }}">Upload Excel</a>
+      <a class="btn" href="{{ url_for('records_page', status='SKIPPED') }}">Skipped records</a>
+    </div>
+  </div>
+</section>
+{% else %}
+
+{# ================= header ================= #}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+    <div>
+      <h1 class="h2">Review beneficiary</h1>
+      <p class="card-sub">
+        Excel row {{ record.row_number }} · record #{{ record.id }}
+        {% if counts.TOTAL %} · {{ counts.COMPLETED }} of {{ counts.TOTAL }} completed{% endif %}
+      </p>
+    </div>
+    <div class="card-actions">
+      <span class="badge s-{{ record.status|slug }}" id="statusBadge">{{ record.status }}</span>
+    </div>
+  </div>
+
+  <div class="row between">
+    <div class="row-tight">
+      {% if neighbours.prev %}
+      <a class="btn btn-sm" href="{{ url_for('review_page', record_id=neighbours.prev) }}"><svg class="icon"><use href="#i-arrow-left"></use></svg> Previous</a>
+      {% endif %}
+      {% if neighbours.next %}
+      <a class="btn btn-sm" href="{{ url_for('review_page', record_id=neighbours.next) }}">Next <svg class="icon"><use href="#i-arrow-right"></use></svg></a>
+      {% endif %}
+    </div>
+    <button class="btn btn-sm btn-ghost" data-copy="{{ record.name }} | DOB {{ record.dob }} | ID {{ record.beneficiary_id }}"
+            data-copy-label="Beneficiary details" type="button">
+      <svg class="icon"><use href="#i-download"></use></svg> Copy for portal search
+    </button>
+  </div>
+</section>
+
+{# ================= validation warnings ================= #}
+{% if warnings %}
+<section class="card" style="margin-top:var(--gap);border-color:{{ 'var(--bad)' if warnings|selectattr('severity','equalto','error')|list else 'var(--border)' }}">
+  <div class="card-head">
+    <span class="head-icon" style="background:var(--warn-bg);color:var(--warn)"><svg class="icon"><use href="#i-alert"></use></svg></span>
+    <div>
+      <h3>Validation notes ({{ warnings|length }})</h3>
+      <p class="card-sub">These came from your Excel file. The app never fills in a value it does not have.</p>
+    </div>
+  </div>
+  {% for item in warnings %}
+  <div class="warn-item w-{{ item.severity }}">
+    <svg class="icon"><use href="#i-{{ 'alert' if item.severity in ['warn','error'] else 'info' }}"></use></svg>
+    <div>
+      <strong class="small">{{ item.field.replace('_',' ')|capitalize }}:</strong> {{ item.message }}
+      {% if item.raw %}<span class="mono">(“{{ item.raw }}”)</span>{% endif %}
+      {% if item.hint %}<div class="w-hint">{{ item.hint }}</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ================= excel values ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+    <div>
+      <h3>Excel values (source)</h3>
+      <p class="card-sub">Original row {{ record.row_number }} from the uploaded file</p>
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-sm" id="editBtn"><svg class="icon"><use href="#i-edit"></use></svg> Edit</button>
+    </div>
+  </div>
+
+  <div class="detail-grid" id="viewMode">
+    <div class="detail-row"><dt>Beneficiary name</dt><dd class="{{ 'edited' if edited.name }}">{{ record.name or '— missing —' }}</dd></div>
+    <div class="detail-row"><dt>Beneficiary ID</dt><dd class="{{ 'edited' if edited.beneficiary_id }}">{{ record.beneficiary_id or '— not in file —' }}</dd></div>
+    <div class="detail-row"><dt>Date of birth</dt><dd class="{{ 'edited' if edited.dob }}">{{ record.dob|nice_date or '— missing —' }}{% if record.dob_raw %} <span class="tiny muted">(from "{{ record.dob_raw }}")</span>{% endif %}</dd></div>
+    <div class="detail-row"><dt>Gender</dt><dd class="{{ 'edited' if edited.gender }}">{{ record.gender or '—' }}</dd></div>
+    <div class="detail-row"><dt>Mobile</dt><dd class="{{ 'edited' if edited.mobile }}">{{ record.mobile or '—' }}</dd></div>
+    <div class="detail-row"><dt>Mother's name</dt><dd class="{{ 'edited' if edited.mother_name }}">{{ record.mother_name or '—' }}</dd></div>
+    <div class="detail-row"><dt>Vaccine</dt><dd class="{{ 'edited' if edited.vaccine_name }}">{{ record.vaccine_name or '— missing —' }}</dd></div>
+    <div class="detail-row"><dt>Dose number</dt><dd class="{{ 'edited' if edited.dose_number }}">{{ record.dose_number or '— missing —' }}</dd></div>
+    <div class="detail-row"><dt>Vaccination date</dt><dd class="{{ 'edited' if edited.vaccination_date }}">{{ record.vaccination_date|nice_date or '— missing —' }}{% if record.vaccination_date_raw %} <span class="tiny muted">(from "{{ record.vaccination_date_raw }}")</span>{% endif %}</dd></div>
+    <div class="detail-row"><dt>Batch / lot</dt><dd class="{{ 'edited' if edited.batch_number }}">{{ record.batch_number or '—' }}</dd></div>
+    <div class="detail-row"><dt>Vaccinator</dt><dd class="{{ 'edited' if edited.vaccinator_name }}">{{ record.vaccinator_name or '—' }}</dd></div>
+    <div class="detail-row"><dt>Facility / site</dt><dd class="{{ 'edited' if edited.facility }}">{{ record.facility or '—' }}</dd></div>
+    <div class="detail-row"><dt>District / block</dt><dd>{{ record.district or '—' }} / {{ record.block or '—' }}</dd></div>
+    <div class="detail-row"><dt>Remarks</dt><dd>{{ record.remarks or '—' }}</dd></div>
+  </div>
+
+  <form id="editMode" hidden>
+    <div class="grid grid-2">
+      {% for field in fields %}
+      <div class="field">
+        <label for="f-{{ field.key }}">{{ field.label }}{% if field.required %} <span class="req">required</span>{% endif %}</label>
+        <input class="input" id="f-{{ field.key }}" name="{{ field.key }}" value="{{ record[field.key] or '' }}"
+               autocomplete="off" spellcheck="false">
+        <span class="hint">{{ field.help }}</span>
+      </div>
+      {% endfor %}
+      <div class="field" style="grid-column:1/-1">
+        <label for="editNote">Why are you changing this? (kept in history)</label>
+        <input class="input" id="editNote" placeholder="e.g. corrected vaccination date from the register">
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" type="submit" id="saveEdit"><svg class="icon"><use href="#i-check"></use></svg> Save changes</button>
+      <button class="btn btn-ghost" type="button" id="cancelEdit">Cancel</button>
+    </div>
+    <p class="tiny muted" style="margin-top:8px">
+      Edits are recorded with old and new values. After saving, the row is validated again automatically.
+    </p>
+  </form>
+</section>
+
+{# ================= matching result ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-users"></use></svg></span>
+    <div>
+      <h3>Matching result</h3>
+      <p class="card-sub">{{ match_ui.label }}</p>
+    </div>
+    <div class="card-actions">
+      <span class="chip">{{ match_ui.confidence_percent }}% confidence</span>
+      <button class="btn btn-sm" id="reprocessBtn"><svg class="icon"><use href="#i-refresh"></use></svg> Match again</button>
+    </div>
+  </div>
+
+  {% if not register.count %}
+  <div class="note warn">
+    No authorised beneficiary register is imported yet, so automatic matching is skipped.
+    Import one from the dashboard (or Settings → Beneficiary Register) — or continue fully manually.
+  </div>
+  {% elif match_ui.candidates %}
+  <div class="reclist">
+    {% for candidate in match_ui.candidates %}
+    <div class="rec">
+      <span class="rec-order">{{ loop.index }}</span>
+      <span class="rec-body">
+        <span class="rec-title">
+          <strong>{{ candidate.official.name or 'Name not in register' }}</strong>
+          <span class="badge {{ 's-completed' if candidate.confidence >= 0.96 and not match_ui['auto_ok'] and loop.index == 1 else ('s-matched' if candidate.confidence >= 0.9 else 's-needs-review') }}">
+            {{ (candidate.confidence * 100)|round(0)|int }}%
+          </span>
+          {% if loop.index == 1 %}<span class="chip tiny">best candidate</span>{% endif %}
+        </span>
+        <span class="rec-meta">
+          <span>ID: {{ candidate.official.beneficiary_id or '—' }}</span>
+          <span>DOB: {{ candidate.official.dob or '—' }}</span>
+          <span>Mobile: {{ candidate.official.mobile or '—' }}</span>
+        </span>
+        <span class="rec-meta">
+          <span>Matched: {{ candidate.matched_fields|join(', ') or 'nothing' }}</span>
+          {% if candidate.conflicting_fields %}<span style="color:var(--bad)">Conflicts: {{ candidate.conflicting_fields|join(', ') }}</span>{% endif %}
+          {% if candidate.missing_fields %}<span>Missing: {{ candidate.missing_fields|join(', ') }}</span>{% endif %}
+        </span>
+        {% for reason in candidate.reasons %}<span class="rec-meta"><span>• {{ reason }}</span></span>{% endfor %}
+        <button class="btn btn-sm" type="button" data-copy="{{ candidate.official.name }} | DOB {{ candidate.official.dob }} | ID {{ candidate.official.beneficiary_id }}"
+                data-copy-label="Register record">Copy register details</button>
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="note small" style="margin-top:10px">
+    {{ match_ui.note }}
+    {% if match_ui.candidates|length > 1 %}
+    <br>More than one similar person was found — open the portal and verify <strong>yourself</strong> which one is correct.
+    {% endif %}
+  </p>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-users"></use></svg></div>
+    <h3>No matching beneficiary found</h3>
+    <p>Nobody in the authorised register matched this row. Search the beneficiary on the portal yourself.</p>
+  </div>
+  {% endif %}
+</section>
+
+{# ================= portal save / confirmation ================= #}
+<section class="card" style="margin-top:var(--gap)" id="portalCard">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+    <div>
+      <h3>Portal save &amp; confirmation</h3>
+      <p class="card-sub">
+        A record is <strong>COMPLETED</strong> only after the official portal confirms it.
+        Current status: <span class="badge s-{{ record.status|slug }}">{{ record.status }}</span>
+      </p>
+    </div>
+  </div>
+
+  {% if record.status == 'COMPLETED' %}
+  <div class="note good">
+    Completed. Confirmation reference: <span class="mono">{{ record.save_reference or '—' }}</span>
+    {% if record.save_confirmed_at %}<br><span class="tiny">Confirmed {{ record.save_confirmed_at }}</span>{% endif %}
+  </div>
+  {% elif record.status == 'SAVE STATUS UNKNOWN' %}
+  <div class="note bad">
+    <strong>Save status unknown.</strong> {{ record.error_message or 'The portal did not confirm this save.' }}
+    <br>Open the portal, search this beneficiary and check whether the dose is already entered.
+    <br><strong>This record will never be re-sent automatically</strong> — that could create a duplicate.
+  </div>
+  {% else %}
+  <p class="small">
+    {% if record.save_attempts %}
+      {{ record.save_attempts }} save attempt(s) recorded.
+    {% else %}
+      Nothing has been sent anywhere yet. All data is still local to this phone.
+    {% endif %}
+  </p>
+  {% endif %}
+
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-sm" type="button" id="openPortal"><svg class="icon"><use href="#i-external"></use></svg> Open U-WIN portal</button>
+    <button class="btn btn-sm btn-primary" type="button" id="prepareSave" {{ 'disabled' if record.status in ['COMPLETED','SAVE STATUS UNKNOWN'] }}>
+      <svg class="icon"><use href="#i-shield"></use></svg> Prepare portal save
+    </button>
+    <button class="btn btn-sm" type="button" id="confirmDone" {{ 'disabled' if record.status in ['COMPLETED','SAVE STATUS UNKNOWN'] }}>
+      <svg class="icon"><use href="#i-check"></use></svg> I confirmed it on the portal
+    </button>
+    <button class="btn btn-sm btn-outline-danger" type="button" id="markUnknown" {{ 'disabled' if record.status == 'COMPLETED' }}>
+      <svg class="icon"><use href="#i-alert"></use></svg> Mark as not confirmed
+    </button>
+  </div>
+
+  <div id="saveSteps"></div>
+</section>
+
+{# ================= actions ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+    <div>
+      <h3>Your decision</h3>
+      <p class="card-sub">Nothing is saved to the portal without your approval.</p>
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn btn-success grow" id="approveBtn"><svg class="icon"><use href="#i-check"></use></svg> Approve</button>
+    <button class="btn grow" id="editBtn2"><svg class="icon"><use href="#i-edit"></use></svg> Edit</button>
+    <button class="btn btn-outline-danger grow" id="rejectBtn"><svg class="icon"><use href="#i-x"></use></svg> Reject</button>
+    <button class="btn grow" id="skipBtn"><svg class="icon"><use href="#i-skip"></use></svg> Skip</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    {% if neighbours.prev %}<a class="btn btn-sm grow" href="{{ url_for('review_page', record_id=neighbours.prev) }}"><svg class="icon"><use href="#i-arrow-left"></use></svg> Previous beneficiary</a>{% endif %}
+    <a class="btn btn-sm grow btn-primary" href="{{ url_for('review_page', record_id=neighbours.next or record.id) }}">Next beneficiary <svg class="icon"><use href="#i-arrow-right"></use></svg></a>
+    {% if record.status in ['SKIPPED','FAILED'] %}
+    <button class="btn btn-sm grow" id="reopenBtn"><svg class="icon"><use href="#i-refresh"></use></svg> Reopen</button>
+    {% endif %}
+  </div>
+
+  {% if record.decision %}
+  <p class="tiny muted" style="margin-top:10px">
+    Last decision: <strong>{{ record.decision }}</strong>{% if record.decision_note %} — {{ record.decision_note }}{% endif %}
+    {% if record.decided_at %} · {{ record.decided_at }}{% endif %}
+  </p>
+  {% endif %}
+</section>
+
+{# ================= extra columns + raw row ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <details class="acc">
+    <summary>Other columns from your Excel file ({{ extras|length }})</summary>
+    {% if extras %}
+    <div class="detail-grid">
+      {% for key, value in extras.items() %}
+      <div class="detail-row"><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="tiny muted">No extra columns were found in this file.</p>
+    {% endif %}
+  </details>
+  <details class="acc">
+    <summary>Original raw row (as read from Excel)</summary>
+    <p class="mono tiny" style="word-break:break-word">{{ record.raw_json }}</p>
+  </details>
+  {% if edited %}
+  <details class="acc">
+    <summary>Edit history ({{ edited|length }} field(s) changed)</summary>
+    <div class="detail-grid">
+      {% for key, change in edited.items() %}
+      <div class="detail-row">
+        <dt>{{ key.replace('_',' ')|capitalize }}</dt>
+        <dd><span class="muted">{{ change['from'] or '—' }}</span> → <strong>{{ change['to'] or '—' }}</strong>
+          <span class="tiny muted">({{ change['at'] }})</span></dd>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if record %}
+<script>window.UWIN_RECORD_ID = {{ record.id }};</script>
+<script src="{{ url_for('static', filename='js/review.js') }}"></script>
+{% endif %}
+{% endblock %}

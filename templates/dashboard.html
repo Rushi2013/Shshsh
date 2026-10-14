@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block content %}
+{# ================= hero ================= #}
+<section class="hero">
+  <h2>Vaccination data, organised safely on this phone</h2>
+  <p>
+    Upload your Excel file, let the app check and match every row locally, then review
+    each beneficiary yourself before anything is entered on the official U-WIN portal.
+  </p>
+  <div class="row">
+    <a class="btn btn-primary" href="{{ url_for('upload_page') }}">
+      <svg class="icon"><use href="#i-upload"></use></svg> Upload Excel
+    </a>
+    {% if counts.TOTAL %}
+    <a class="btn" href="{{ url_for('review_page') }}">
+      <svg class="icon"><use href="#i-check-circle"></use></svg> Continue review
+    </a>
+    {% else %}
+    <a class="btn" href="{{ url_for('api_sample_file') }}">
+      <svg class="icon"><use href="#i-download"></use></svg> Get example file
+    </a>
+    {% endif %}
+  </div>
+</section>
+
+{# ================= recovery banner ================= #}
+{% if recovery and recovery.messages %}
+<div class="card" style="margin-top:14px;border-color:var(--warn)">
+  <div class="card-head">
+    <span class="head-icon" style="background:var(--warn-bg);color:var(--warn)"><svg class="icon"><use href="#i-alert"></use></svg></span>
+    <div>
+      <h3>Saved progress recovered</h3>
+      <p class="card-sub">{{ recovery.messages|join(' ') }}</p>
+    </div>
+  </div>
+  <p class="small">
+    A save that could not be confirmed is <strong>never retried automatically</strong> — that could create a
+    duplicate entry in the national register. Open the portal, search the beneficiary, and confirm it yourself.
+  </p>
+  {% if counts['SAVE STATUS UNKNOWN'] %}
+  <a class="btn btn-warn btn-sm" href="{{ url_for('records_page', status='SAVE STATUS UNKNOWN') }}">
+    <svg class="icon"><use href="#i-alert"></use></svg> Show {{ counts['SAVE STATUS UNKNOWN'] }} unconfirmed record(s)
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ================= resume previous session ================= #}
+{% if resumable and not active_session %}
+<div class="card" style="margin-top:14px">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-refresh"></use></svg></span>
+    <div>
+      <h3>Resume previous session</h3>
+      <p class="card-sub">These files still have records waiting. Nothing is ever repeated automatically.</p>
+    </div>
+  </div>
+  <div class="reclist">
+    {% for item in resumable %}
+    <button class="rec js-activate" data-session="{{ item.id }}" type="button" style="width:100%;text-align:left">
+      <span class="rec-order"><svg class="icon icon-sm"><use href="#i-file"></use></svg></span>
+      <span class="rec-body">
+        <span class="rec-title"><strong>{{ item.original_filename }}</strong><span class="badge s-pending">{{ item.outstanding }} open</span></span>
+        <span class="rec-meta"><span>{{ item.TOTAL }} rows</span><span>{{ item.progress }}% done</span><span>{{ item.updated_at }}</span></span>
+      </span>
+      <svg class="icon"><use href="#i-arrow-right"></use></svg>
+    </button>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ================= live statistics ================= #}
+<h2 class="only-desktop" style="margin:18px 0 10px">Live statistics</h2>
+<section class="grid grid-4" style="margin-top:14px" aria-label="Live statistics">
+  <a class="stat t-total stat-link" href="{{ url_for('records_page') }}">
+    <div class="stat-value" data-stat="total">{{ counts.TOTAL }}</div>
+    <div class="stat-label">Total records</div>
+  </a>
+  <a class="stat t-done stat-link" href="{{ url_for('records_page', status='COMPLETED') }}">
+    <div class="stat-value" data-stat="completed">{{ counts.COMPLETED }}</div>
+    <div class="stat-label">Completed</div>
+  </a>
+  <a class="stat t-warn stat-link" href="{{ url_for('records_page', status='NEEDS REVIEW') }}">
+    <div class="stat-value" data-stat="needs-review">{{ counts['NEEDS REVIEW'] }}</div>
+    <div class="stat-label">Needs review</div>
+  </a>
+  <a class="stat t-skip stat-link" href="{{ url_for('records_page', status='PENDING') }}">
+    <div class="stat-value" data-stat="pending">{{ counts.PENDING }}</div>
+    <div class="stat-label">Pending</div>
+  </a>
+  <a class="stat t-ok stat-link" href="{{ url_for('records_page', status='MATCHED') }}">
+    <div class="stat-value" data-stat="matched">{{ counts.MATCHED }}</div>
+    <div class="stat-label">Matched</div>
+  </a>
+  <a class="stat t-ok stat-link" href="{{ url_for('records_page', status='APPROVED') }}">
+    <div class="stat-value" data-stat="approved">{{ counts.APPROVED }}</div>
+    <div class="stat-label">Approved</div>
+  </a>
+  <a class="stat t-bad stat-link" href="{{ url_for('records_page', status='FAILED') }}">
+    <div class="stat-value" data-stat="failed">{{ counts.FAILED }}</div>
+    <div class="stat-label">Failed</div>
+  </a>
+  <a class="stat t-unknown stat-link" href="{{ url_for('records_page', status='SAVE STATUS UNKNOWN') }}">
+    <div class="stat-value" data-stat="save-status-unknown">{{ counts['SAVE STATUS UNKNOWN'] }}</div>
+    <div class="stat-label">Save unknown</div>
+  </a>
+</section>
+
+{# ================= progress ================= #}
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-chart"></use></svg></span>
+      <div>
+        <h3>Progress</h3>
+        <p class="card-sub">Completed + skipped out of {{ counts.TOTAL }} records</p>
+      </div>
+      <div class="card-actions"><span class="chip chip-progress"><span class="progress-ring" data-stat="progress">{{ counts.PROGRESS }}%</span></span></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress"><span data-progress-bar style="width: {{ counts.PROGRESS }}%"></span></div>
+      <div class="progress-legend">
+        <span>{{ counts.COMPLETED + counts.SKIPPED }} finished</span>
+        <span>{{ counts.OPEN }} still open</span>
+      </div>
+    </div>
+    {% if counts.ATTENTION %}
+    <p class="note warn small" style="margin-top:12px">
+      {{ counts.ATTENTION }} record(s) need a manual check (failed or unconfirmed save).
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+      <div>
+        <h3>Queue controls</h3>
+        <p class="card-sub">State: <span class="badge {{ 's-completed' if not (queue.paused or queue.stopped) else 's-needs-review' }}" data-queue-state>{{ 'Stopped' if queue.stopped else ('Paused' if queue.paused else 'Ready') }}</span></p>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn btn-sm" id="btnPause"><svg class="icon"><use href="#i-clock"></use></svg> Pause</button>
+      <button class="btn btn-sm btn-primary" id="btnResume"><svg class="icon"><use href="#i-refresh"></use></svg> Resume</button>
+      <button class="btn btn-sm btn-warn" id="btnStop"><svg class="icon"><use href="#i-x"></use></svg> Stop</button>
+      <button class="btn btn-sm" id="btnProcessNext"><svg class="icon"><use href="#i-arrow-right"></use></svg> Process next</button>
+      <button class="btn btn-sm" id="btnRetry"><svg class="icon"><use href="#i-refresh"></use></svg> Retry failed</button>
+    </div>
+    <p class="tiny muted" style="margin-top:10px">
+      Processing is always step-by-step and never runs in the background. Completed records and
+      unconfirmed saves are never repeated.
+    </p>
+  </div>
+</section>
+
+{# ================= active file ================= #}
+<h2 class="only-desktop" style="margin:18px 0 10px">Active file</h2>
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+      <div>
+        <h3>{{ active_session.original_filename if active_session else 'No file loaded yet' }}</h3>
+        <p class="card-sub">
+          {% if active_session %}
+            Sheet “{{ active_session.sheet_name }}” · header row {{ active_session.header_row }} · {{ active_session.backend }}
+          {% else %}
+            Upload an Excel file to begin. Everything is processed on this device.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    {% if active_session %}
+    <div class="detail-grid">
+      <div class="detail-row"><dt>Data rows imported</dt><dd>{{ active_session.total_rows }}</dd></div>
+      <div class="detail-row"><dt>Empty rows skipped</dt><dd>{{ active_session.empty_rows }}</dd></div>
+      <div class="detail-row"><dt>Duplicate rows</dt><dd>{{ active_session.duplicate_rows }}</dd></div>
+      <div class="detail-row"><dt>Empty cells</dt><dd>{{ active_session.missing_cells }}</dd></div>
+      <div class="detail-row"><dt>Uploaded</dt><dd>{{ active_session.created_at }}</dd></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <a class="btn btn-sm" href="{{ url_for('records_page') }}"><svg class="icon"><use href="#i-list"></use></svg> Records</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('review_page') }}"><svg class="icon"><use href="#i-check-circle"></use></svg> Review queue</a>
+      <a class="btn btn-sm" href="{{ url_for('reports_page') }}"><svg class="icon"><use href="#i-file"></use></svg> Reports</a>
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-upload"></use></svg></div>
+      <h3>Start with an Excel file</h3>
+      <p>.xlsx or .xls — from the Android Files app, WhatsApp download folder, or a pen drive copy.</p>
+      <div class="row" style="justify-content:center">
+        <a class="btn btn-primary" href="{{ url_for('upload_page') }}">Upload Excel</a>
+        <a class="btn" href="{{ url_for('api_sample_file') }}">Download example</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ================= what to do next ================= #}
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-info"></use></svg></span>
+      <div>
+        <h3>What to do next</h3>
+        <p class="card-sub">Simple 5-step routine — same every day</p>
+      </div>
+    </div>
+    <ol class="list-plain">
+      <li><strong>1. Upload</strong> the day's Excel file (Upload Excel).</li>
+      <li><strong>2. Check the mapping</strong> — the app guesses the columns, you correct anything wrong.</li>
+      <li><strong>3. Import</strong> — every row is validated and matched against your authorised register.</li>
+      <li><strong>4. Review</strong> each record: Approve / Edit / Reject / Skip. Nothing is saved without your approval.</li>
+      <li><strong>5. Confirm on the portal</strong>, paste the acknowledgement number, then the record becomes Completed.</li>
+    </ol>
+    <div class="note small" style="margin-top:10px">
+      The app never invents a missing date, vaccine or dose. Anything unclear is marked
+      <span class="badge s-needs-review">Needs Review</span> for you.
+    </div>
+  </div>
+</section>
+
+{# ================= register + recent sessions ================= #}
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-users"></use></svg></span>
+      <div>
+        <h3>Authorised beneficiary register</h3>
+        <p class="card-sub">
+          {% if register.count %}
+            {{ register.count }} record(s) · {{ register.source_file }} · imported {{ register.imported_at }}
+          {% else %}
+            Not imported — matching cannot run until you import it
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="dropzone" id="registerDrop" role="button" tabindex="0" aria-label="Choose register file">
+      <div class="dz-icon"><svg class="icon icon-lg"><use href="#i-users"></use></svg></div>
+      <strong id="registerName">Choose the authorised register file</strong>
+      <span>.xlsx, .xls or .csv — stays on this device, never uploaded anywhere</span>
+    </div>
+    <input type="file" id="registerInput" accept=".xlsx,.xls,.csv" hidden>
+    <div class="row" style="margin-top:10px">
+      <button class="btn btn-primary btn-sm" id="registerImport"><svg class="icon"><use href="#i-upload"></use></svg> Import register</button>
+      <a class="btn btn-sm" href="{{ url_for('api_register_sample') }}"><svg class="icon"><use href="#i-download"></use></svg> Example register</a>
+      {% if register.count %}
+      <button class="btn btn-sm btn-outline-danger" id="registerClear"><svg class="icon"><use href="#i-trash"></use></svg> Clear</button>
+      {% endif %}
+    </div>
+    <p class="tiny muted" style="margin-top:8px">
+      Matching order: exact Beneficiary ID → name + DOB → name + another field → fuzzy name
+      (suggestion only, never auto-approved).
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-clock"></use></svg></span>
+      <div>
+        <h3>Recent activity</h3>
+        <p class="card-sub">Latest local events (no patient data is logged)</p>
+      </div>
+      <div class="card-actions"><a class="btn btn-ghost btn-sm" href="{{ url_for('history_page') }}">All</a></div>
+    </div>
+    {% if recent_events %}
+    <ul class="list-plain timeline">
+      {% for event in recent_events %}
+      <li class="l-{{ event.level }}">
+        <strong class="small">{{ event.event.replace('_',' ')|capitalize }}</strong>
+        <div class="tiny muted">{{ event.message }}{% if event.session_id %} · session #{{ event.session_id }}{% endif %} · {{ event.ts }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-clock"></use></svg></div>
+      <h3>No activity yet</h3>
+      <p>Upload your first Excel file and the history will appear here.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{# ================= sessions table ================= #}
+{% if sessions %}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-list"></use></svg></span>
+    <div>
+      <h3>Uploaded files</h3>
+      <p class="card-sub">Tap a row to open that file's review queue</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr><th>File</th><th>Rows</th><th>Done</th><th>Open</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for item in sessions %}
+        <tr>
+          <td>
+            <strong class="small">{{ item.original_filename }}</strong>
+            <div class="tiny muted">{{ item.created_at }}</div>
+          </td>
+          <td class="num">{{ item.TOTAL }}</td>
+          <td class="num">{{ item.COMPLETED }}</td>
+          <td class="num">{{ item['NEEDS REVIEW'] + item.PENDING + item.MATCHED + item.APPROVED }}</td>
+          <td><span class="badge s-{{ item.status|slug }}">{{ item.status|capitalize }}</span></td>
+          <td class="right nowrap">
+            <button class="btn btn-sm js-activate" data-session="{{ item.id }}">Open</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# ================= privacy note ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon" style="background:var(--good-bg);color:var(--good)"><svg class="icon"><use href="#i-shield"></use></svg></span>
+    <div>
+      <h3>Privacy in one line</h3>
+      <p class="card-sub">Vaccination data is sensitive medical data. This app keeps it on your device only.</p>
+    </div>
+  </div>
+  <ul class="list-plain">
+    <li>No cloud, no analytics, no third-party upload — the dashboard runs at <span class="mono">{{ url_for('dashboard') }}</span> on this phone.</li>
+    <li>Passwords and OTP values are never written to the database, logs or reports.</li>
+    <li>Delete everything any time from <a href="{{ url_for('settings_page') }}">Settings → Privacy</a>.</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

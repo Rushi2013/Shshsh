@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+    <div>
+      <h1 class="h2">U-WIN portal login assistant</h1>
+      <p class="card-sub">Semi-automated and safe: the app opens the official page, you do the login and the OTP yourself.</p>
+    </div>
+    <div class="card-actions">
+      <span class="badge {{ 's-completed' if portal.credential_buffer.state == 'logged_in' else 's-pending' }}">
+        Session: {{ portal.credential_buffer.state.replace('_',' ') }}
+      </span>
+    </div>
+  </div>
+
+  <div class="note small">
+    <strong>Official portal:</strong> <span class="mono">{{ portal.portal_url }}</span><br>
+    The app only <em>opens</em> this page in your browser. It never calls private endpoints, never bypasses
+    OTP or CAPTCHA, never reads your SMS, and never stores your password or OTP in a file.
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-primary" id="openPortalBtn"><svg class="icon"><use href="#i-external"></use></svg> Open U-WIN login page</button>
+    <a class="btn" href="{{ portal.portal_url }}" target="_blank" rel="noreferrer noopener">
+      <svg class="icon"><use href="#i-download"></use></svg> Open in a new tab instead
+    </a>
+    <button class="btn" data-copy="{{ portal.portal_url }}" data-copy-label="Portal link" type="button">
+      <svg class="icon"><use href="#i-file"></use></svg> Copy link
+    </button>
+  </div>
+  <p class="tiny muted" style="margin-top:8px">
+    If Chrome does not open automatically, copy the link above and paste it in Chrome's address bar.
+  </p>
+</section>
+
+{# ================= guided steps ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-list"></use></svg></span>
+    <div><h3>Step-by-step login (5 steps)</h3><p class="card-sub">Same routine every day</p></div>
+  </div>
+  <div class="steps" id="loginSteps">
+    {% for step in portal.steps %}
+    <div class="step {{ 'is-active' if loop.first }}" data-step="{{ step.step }}">
+      <span class="step-num"></span>
+      <div class="step-body">
+        <strong>{{ step.title }}</strong>
+        <p>{{ step.text }}</p>
+        {% if step.action == 'open_portal' %}
+        <button class="btn btn-sm" type="button" id="stepOpen">Open portal now</button>
+        {% elif step.action == 'hold_credentials' %}
+        <button class="btn btn-sm" type="button" id="stepHold">Use the secure form below</button>
+        {% elif step.action == 'await_otp' %}
+        <button class="btn btn-sm" type="button" id="stepOtpStage">I have pressed Login — waiting for SMS OTP</button>
+        {% elif step.action == 'confirm_login' %}
+        <button class="btn btn-sm btn-primary" type="button" id="stepConfirm">I am logged in — continue</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ================= secure credential form ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-lock"></use></svg></span>
+    <div>
+      <h3>Secure login form (optional)</h3>
+      <p class="card-sub">
+        Use this only if you find it easier than typing in Chrome. Values stay in the server's memory
+        for one login attempt and are wiped automatically.
+      </p>
+    </div>
+  </div>
+
+  <div class="otp-banner" id="otpBanner" hidden>
+    <svg class="icon"><use href="#i-alert"></use></svg>
+    <div>
+      <strong>OTP Required – Enter the SMS OTP</strong>
+      <div class="tiny">Type it in the official portal page in Chrome. Do not share it with anyone, and do not paste it here.</div>
+    </div>
+  </div>
+
+  <form id="credForm" style="margin-top:12px" autocomplete="off">
+    <div class="grid grid-2">
+      <div class="field">
+        <label for="mobile">U-WIN mobile number</label>
+        <input class="input" id="mobile" name="mobile" inputmode="numeric" maxlength="12" autocomplete="off"
+               placeholder="10 digit mobile used for U-WIN">
+      </div>
+      <div class="field">
+        <label for="password">U-WIN password</label>
+        <input class="input" id="password" name="password" type="password" autocomplete="new-password"
+               placeholder="typed once, never saved">
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" type="submit" id="holdBtn">
+        <svg class="icon"><use href="#i-lock"></use></svg> Hold credentials in memory
+      </button>
+      <button class="btn" type="button" id="wipeBtn"><svg class="icon"><use href="#i-trash"></use></svg> Wipe now</button>
+    </div>
+    <ul class="list-plain tiny muted" style="margin-top:8px">
+      <li>Nothing is written to the database, the log file, an Excel file or a report.</li>
+      <li>The password is dropped from memory as soon as the login is confirmed, and everything is wiped after 10 minutes at most.</li>
+      <li>If an approved API integration is enabled, these values are sent to it over HTTPS — otherwise they are not sent anywhere.</li>
+    </ul>
+  </form>
+
+  <div class="detail-grid" style="margin-top:12px">
+    <div class="detail-row"><dt>Login state</dt><dd id="credState">{{ portal.credential_buffer.state }}</dd></div>
+    <div class="detail-row"><dt>Mobile (masked)</dt><dd id="credMobile">{{ portal.credential_buffer.mobile_masked or '—' }}</dd></div>
+    <div class="detail-row"><dt>Held in memory for</dt><dd id="credAge">{{ portal.credential_buffer.age_seconds }}s of {{ portal.credential_buffer.ttl_seconds }}s</dd></div>
+    <div class="detail-row"><dt>Message</dt><dd id="credMessage">{{ portal.credential_buffer.message or '—' }}</dd></div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-sm" type="button" id="logoutBtn"><svg class="icon"><use href="#i-x"></use></svg> Log out / wipe local login data</button>
+  </div>
+</section>
+
+{# ================= what happens next ================= #}
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+      <div><h3>After login</h3><p class="card-sub">Continue with the Excel workflow</p></div>
+    </div>
+    <ol class="list-plain small">
+      <li>Your records are already validated and matched locally.</li>
+      <li>Open the Review Queue and handle one record at a time.</li>
+      <li>For each record: search the beneficiary on the portal, compare, then save.</li>
+      <li>Come back and paste the portal acknowledgement — only then is it COMPLETED.</li>
+    </ol>
+    <div class="row" style="margin-top:10px">
+      <a class="btn btn-sm btn-primary" href="{{ url_for('review_page') }}">Go to Review Queue</a>
+      <a class="btn btn-sm" href="{{ url_for('records_page') }}">Beneficiary records</a>
+    </div>
+    {% if next_record %}
+    <p class="tiny muted" style="margin-top:8px">
+      Next record waiting: Excel row {{ next_record.row_number }} ·
+      {{ next_record.name or 'name missing' }} · {{ next_record.status }}
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+      <div><h3>Official integration (approved API)</h3><p class="card-sub">Only if your department approves it</p></div>
+    </div>
+    {% if portal.adapter.enabled %}
+    <div class="note good small">Approved API reachable{{ ': ' + portal.adapter.message if portal.adapter.message }}</div>
+    {% else %}
+    <p class="small">
+      No approved API is configured, so the app runs the honest <strong>assisted workflow</strong>:
+      it opens the portal, shows the details you need, and waits for your confirmation.
+    </p>
+    <p class="small">
+      Automatic data entry would only be added if the U-WIN / MOHFW team provides a documented,
+      permissioned API. The adapter contract is documented in
+      <span class="mono">docs/UWIN_INTEGRATION.md</span> and can be configured in Settings.
+    </p>
+    {% endif %}
+    <div class="note warn small" style="margin-top:10px">
+      If the portal does not permit automation or does not confirm a save, the record is marked
+      <strong>SAVE STATUS UNKNOWN</strong> and needs your manual check. It is never retried automatically.
+    </div>
+  </div>
+</section>
+
+{# ================= security summary ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-info"></use></svg></span>
+    <div><h3>Security rules this app follows</h3><p class="card-sub">Read once and you will know exactly what the app does</p></div>
+  </div>
+  <ul class="list-plain">
+    <li><strong>OTP:</strong> {{ portal.otp_policy }}</li>
+    <li><strong>Passwords:</strong> never in the source code, the database, the logs, the reports or Excel files.</li>
+    <li><strong>Permissions:</strong> only the portal pages are opened, and only through your own browser.</li>
+    <li><strong>Honesty:</strong> {{ portal.compliance_note }}</li>
+  </ul>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/portal.js') }}"></script>
+{% endblock %}

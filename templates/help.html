@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-info"></use></svg></span>
+    <div>
+      <h1 class="h2">Help &amp; troubleshooting</h1>
+      <p class="card-sub">Simple Hinglish explanations, no computer knowledge needed.</p>
+    </div>
+  </div>
+
+  <div class="note small">
+    Dashboard chalta hai yahan: <span class="mono">{{ url }}</span> — sirf isi phone par.
+    Termux band kiya to server band. Data save rehta hai, phir se chalu karne par progress wapas mil jata hai.
+  </div>
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-upload"></use></svg></span>
+    <div><h3>Roz ka kaam — 6 simple steps</h3><p class="card-sub">Daily working routine</p></div>
+  </div>
+  <ol class="list-plain small">
+    <li><strong>Termux kholo</strong> → <span class="kbd">cd ~/uwin-smart-assistant</span> → <span class="kbd">bash start.sh</span></li>
+    <li><strong>Chrome kholo</strong> → <span class="mono">{{ url }}</span> (ya <span class="kbd">termux-open-url {{ url }}</span>)</li>
+    <li><strong>Upload Excel</strong> → apni file chuno → preview dekho → column mapping check karo.</li>
+    <li><strong>Import &amp; check</strong> dabao → har row validate + match ho jayegi (mobile par hi).</li>
+    <li><strong>Review Queue</strong> → ek-ek beneficiary dekho → Approve / Edit / Reject / Skip.</li>
+    <li><strong>Portal par confirm</strong> → reference number paste karo → record COMPLETED ban jayega.</li>
+  </ol>
+  <p class="small muted">
+    Kaam khatam hone par <span class="kbd">bash stop.sh</span> chala do. Data safe rahega, agli baar
+    "Resume previous session" se wahi se shuru kar sakte ho.
+  </p>
+</section>
+
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+      <div><h3>Excel file ka format</h3><p class="card-sub">Example file dashboard se download kar sakte ho</p></div>
+    </div>
+    <p class="small">Pehli row me headings hone chahiye. Naam kuch bhi ho sakta hai — app khud dhoondh lega,
+      aap mapping screen par theek kar sakte ho.</p>
+    <div class="table-wrap">
+      <table class="data" style="min-width:520px">
+        <thead><tr><th>Sr No</th><th>Name of Beneficiary</th><th>Date of Birth</th><th>Vaccine Name</th><th>Dose No</th><th>Date of Vaccination</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Aarav Sharma</td><td>12-04-2023</td><td>Pentavalent</td><td>1</td><td>12-06-2023</td></tr>
+          <tr><td>2</td><td>Diya Patil</td><td>05-01-2023</td><td>OPV</td><td>0</td><td>05-01-2023</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tiny muted" style="margin-top:8px">
+      Zaroori: naam, vaccine ka naam, aur vaccination date. Baaki columns optional hain.
+      Khali cell ko app bharta nahi — sirf "Needs Review" mark karta hai.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+      <div><h3>Status ka matlab</h3><p class="card-sub">Kya matlab hai har badge ka</p></div>
+    </div>
+    <ul class="list-plain small">
+      <li><span class="badge s-pending">PENDING</span> — row padh li, problem nahi mili, abhi aapne faisla nahi kiya.</li>
+      <li><span class="badge s-matched">MATCHED</span> — authorised register me pakka match mila (ID ya naam+DOB).</li>
+      <li><span class="badge s-needs-review">NEEDS REVIEW</span> — kuch missing/conflicting hai, ya match pakka nahi hai. Aapko dekhna hai.</li>
+      <li><span class="badge s-approved">APPROVED</span> — aapne sahi bola, portal par save karna baaki hai.</li>
+      <li><span class="badge s-completed">COMPLETED</span> — portal ne confirm kar diya (reference number ke saath).</li>
+      <li><span class="badge s-skipped">SKIPPED</span> — abhi chhod diya, baad me khol sakte ho.</li>
+      <li><span class="badge s-failed">FAILED</span> — reject kiya ya processing fail hui.</li>
+      <li><span class="badge s-save-status-unknown">SAVE STATUS UNKNOWN</span> — portal ne confirm nahi kiya. Portal par khud jaake check karo. Dobara automatic nahi bhejega.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-alert"></use></svg></span>
+    <div><h3>Troubleshooting — problem aur solution</h3><p class="card-sub">Sabse common problems</p></div>
+  </div>
+
+  <details class="acc" open>
+    <summary>Chrome me dashboard nahi khul raha</summary>
+    <ul class="list-plain small">
+      <li>Termux me server chal raha hai kya? Wahan <span class="mono">Running on http://127.0.0.1:5000</span> dikhna chahiye.</li>
+      <li>Chrome me exactly likho: <span class="mono">{{ url }}</span> (http:// lagana zaroori hai).</li>
+      <li>Termux band ho gaya to dubara: <span class="kbd">bash start.sh</span></li>
+      <li>Port vyast hai to: <span class="kbd">UWIN_PORT=5001 bash start.sh</span> aur Chrome me <span class="mono">http://127.0.0.1:5001</span></li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>“Module not found: flask / pandas”</summary>
+    <ul class="list-plain small">
+      <li><span class="kbd">pip install --upgrade pip</span></li>
+      <li><span class="kbd">pip install -r requirements.txt</span></li>
+      <li>Phir check karo: <span class="kbd">python app.py --check</span></li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>File upload nahi ho rahi / “not a real Excel file”</summary>
+    <ul class="list-plain small">
+      <li>File ko Excel me kholo → Save As → Excel Workbook (.xlsx) → phir upload karo.</li>
+      <li>.csv bhi chalega (Upload page par accept hota hai).</li>
+      <li>File 5 MB se badi hai? Settings → Upload size limit badha do (max 25 MB).</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>“Missing columns” ya galat data import ho gaya</summary>
+    <ul class="list-plain small">
+      <li>Upload page par <strong>Map Excel columns</strong> section kholo aur sahi column chuno.</li>
+      <li>Header row galat lag rahi hai? “Header row number” badal ke Reload preview dabao.</li>
+      <li>Data dobara import karna ho to: Records → file kholo → Import again (review decisions hat jayenge, warning milega).</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>Match nahi mil raha</summary>
+    <ul class="list-plain small">
+      <li>Dashboard par <strong>Authorised beneficiary register</strong> import karo (naam/ID ki list).</li>
+      <li>Naam ki spelling alag hai to fuzzy suggestion milega — usse auto-approve mat karo.</li>
+      <li>DOB ka format galat ho to Settings → Date format set karo.</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>OTP page par aa gaya, ab kya?</summary>
+    <ul class="list-plain small">
+      <li>OTP SMS me aata hai — usko <strong>official U-WIN page</strong> me khud type karo.</li>
+      <li>App SMS nahi padhta, OTP save nahi karta. Ye jaan-boojh kar aisa banaya gaya hai.</li>
+      <li>Login ho gaya to dashboard me “I am logged in — continue” dabao aur Excel kaam shuru karo.</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>Portal ne save confirm nahi kiya (SAVE STATUS UNKNOWN)</summary>
+    <ul class="list-plain small">
+      <li>Portal khud kholo, beneficiary search karo, dekho dose pehle se hai ya nahi.</li>
+      <li>Agar pehle se hai → record ko us reference ke saath “I confirmed it on the portal” se complete karo.</li>
+      <li>Agar nahi hai → record kholo, dobara verify karke save karo. Automatic retry khatarnak hai (duplicate ban sakta hai), isliye app dobara nahi bhejta.</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>Phone restart ho gaya — mera kaam gaya?</summary>
+    <ul class="list-plain small">
+      <li>Nahi. Sab kuch SQLite me save hota hai.</li>
+      <li>Dashboard kholo → <strong>Resume previous session</strong> dabao → wahi se aage badho.</li>
+      <li>Jo save confirm nahi hua tha wo “Save unknown” me dikhega — usko khud check karo.</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>App dheema lag raha hai</summary>
+    <ul class="list-plain small">
+      <li>Settings → Rows per page kam kar do (10-20 rakho).</li>
+      <li>Bade file ko 2-3 hisson me todo, ya sirf zaroori rows rakho.</li>
+      <li>History → Cleanup now chala kar purani files hata do.</li>
+    </ul>
+  </details>
+
+  <details class="acc">
+    <summary>Data delete karna hai</summary>
+    <ul class="list-plain small">
+      <li>Settings → Privacy → <strong>Delete ALL local data</strong> (confirm me DELETE likhna padta hai).</li>
+      <li>Sirf ek file ka data hatana ho to History → file ke saamne Delete dabao.</li>
+    </ul>
+  </details>
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-phone"></use></svg></span>
+    <div><h3>Termux commands — copy paste ke liye</h3><p class="card-sub">Yaad rakhne ki zaroorat nahi</p></div>
+  </div>
+  <ul class="list-plain small">
+    <li><span class="kbd">pkg update &amp;&amp; pkg upgrade</span> — pehli baar</li>
+    <li><span class="kbd">pkg install python git -y</span> — Python aur git install</li>
+    <li><span class="kbd">bash setup.sh</span> — folders, libraries, sample file sab set</li>
+    <li><span class="kbd">bash start.sh</span> — dashboard chalu</li>
+    <li><span class="kbd">bash stop.sh</span> — dashboard band</li>
+    <li><span class="kbd">python app.py --check</span> — sab theek hai kya, check karo</li>
+    <li><span class="kbd">python app.py --cleanup</span> — purani files saaf karo</li>
+  </ul>
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+    <div><h3>Important safety note</h3><p class="card-sub">Padh lena zaroori hai</p></div>
+  </div>
+  <ul class="list-plain small">
+    <li>Ye app sirf <strong>data organise aur review</strong> karta hai. Final entry official U-WIN portal par aap khud karte ho.</li>
+    <li>Bina portal ke confirmation ke app kabhi “COMPLETED” nahi likhta.</li>
+    <li>App kisi bhi secret endpoint ko call nahi karta, OTP/CAPTCHA bypass nahi karta, rate limit nahi todta.</li>
+    <li>Patient ka data sirf authorised kaam ke liye use karo, aur kaam khatam hone par delete kar do.</li>
+    <li>Kisi ko apna U-WIN password ya OTP na batao — app bhi kabhi nahi maangta (form optional hai).</li>
+  </ul>
+  <p class="tiny muted">Version {{ version }} · Portal: <span class="mono">{{ portal_url }}</span></p>
+</section>
+{% endblock %}

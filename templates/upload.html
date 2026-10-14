@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-upload"></use></svg></span>
+    <div>
+      <h1 class="h2">Upload Excel file</h1>
+      <p class="card-sub">.xlsx or .xls · stays on this phone · nothing is sent to the internet</p>
+    </div>
+  </div>
+
+  <ol class="list-plain small" style="margin-bottom:14px">
+    <li><strong>Step 1.</strong> Tap the box below → Android Files app opens.</li>
+    <li><strong>Step 2.</strong> Pick your Excel file (Downloads / WhatsApp / Drive download).</li>
+    <li><strong>Step 3.</strong> See the preview, then correct the column mapping if needed.</li>
+    <li><strong>Step 4.</strong> Press <em>Import &amp; check records</em>. Reviewing starts after that.</li>
+  </ol>
+
+  <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Choose Excel file">
+    <div class="dz-icon"><svg class="icon icon-lg"><use href="#i-upload"></use></svg></div>
+    <strong id="dzTitle">Choose Excel file (.xlsx / .xls)</strong>
+    <span id="dzHint">Maximum size: {{ settings.max_upload_mb }} MB — change it in Settings</span>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
+
+  <div class="row" style="margin-top:12px">
+    <a class="btn btn-sm" href="{{ url_for('api_sample_file') }}"><svg class="icon"><use href="#i-download"></use></svg> Download example file</a>
+    <button class="btn btn-sm" id="resetBtn" hidden><svg class="icon"><use href="#i-x"></use></svg> Choose another file</button>
+  </div>
+</section>
+
+{# ================= file card ================= #}
+<section class="card" id="fileCard" style="margin-top:var(--gap)" hidden>
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+    <div>
+      <h3 id="fileName">file.xlsx</h3>
+      <p class="card-sub" id="fileMeta">—</p>
+    </div>
+    <div class="card-actions"><span class="badge s-matched" id="fileRows">0 rows</span></div>
+  </div>
+
+  <div class="grid grid-3" style="margin-bottom:12px">
+    <div class="stat t-total"><div class="stat-value" id="statRows">0</div><div class="stat-label">Data rows</div></div>
+    <div class="stat t-skip"><div class="stat-value" id="statEmpty">0</div><div class="stat-label">Empty rows</div></div>
+    <div class="stat t-warn"><div class="stat-value" id="statDup">0</div><div class="stat-label">Duplicates</div></div>
+    <div class="stat t-bad"><div class="stat-value" id="statMissing">0</div><div class="stat-label">Empty cells</div></div>
+  </div>
+
+  <div id="fileWarnings"></div>
+
+  <div class="card-section">
+    <div class="row between">
+      <strong class="small">Sheet &amp; header row</strong>
+      <span class="tiny muted">Wrong columns? Change these and press Reload preview.</span>
+    </div>
+    <div class="grid grid-2" style="margin-top:8px">
+      <div class="field">
+        <label for="sheetSelect">Sheet</label>
+        <select class="select" id="sheetSelect"></select>
+      </div>
+      <div class="field">
+        <label for="headerRowInput">Header row number</label>
+        <input class="input" id="headerRowInput" type="number" min="1" max="50" value="1" inputmode="numeric">
+      </div>
+    </div>
+    <button class="btn btn-sm" id="reloadPreview"><svg class="icon"><use href="#i-refresh"></use></svg> Reload preview</button>
+  </div>
+</section>
+
+{# ================= preview ================= #}
+<section class="card" id="previewCard" style="margin-top:var(--gap)" hidden>
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-eye"></use></svg></span>
+    <div>
+      <h3>Preview — first 20 rows</h3>
+      <p class="card-sub">Scroll sideways to see all columns</p>
+    </div>
+  </div>
+  <div class="table-wrap" id="previewTable"></div>
+</section>
+
+{# ================= mapping ================= #}
+<section class="card" id="mappingCard" style="margin-top:var(--gap)" hidden>
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-list"></use></svg></span>
+    <div>
+      <h3>Map Excel columns</h3>
+      <p class="card-sub">The app guessed these from your headings. Please check each one — wrong mapping means wrong records.</p>
+    </div>
+    <div class="card-actions"><span class="badge s-pending" id="mappingCount">0 mapped</span></div>
+  </div>
+
+  <div id="mappingRows"></div>
+
+  <div class="actions-sticky" style="margin-top:14px">
+    <button class="btn btn-primary grow" id="importBtn"><svg class="icon"><use href="#i-check"></use></svg> Import &amp; check records</button>
+    <button class="btn" id="autoMapBtn"><svg class="icon"><use href="#i-refresh"></use></svg> Auto-detect again</button>
+  </div>
+  <p class="tiny muted" style="margin-top:8px">
+    Nothing is filled in automatically for missing values. Unknown dates, empty vaccine names and
+    unclear rows are marked <span class="badge s-needs-review">Needs Review</span> instead.
+  </p>
+</section>
+
+{# ================= import result ================= #}
+<section class="card" id="resultCard" style="margin-top:var(--gap)" hidden>
+  <div class="card-head">
+    <span class="head-icon" style="background:var(--good-bg);color:var(--good)"><svg class="icon"><use href="#i-check-circle"></use></svg></span>
+    <div>
+      <h3>Import finished</h3>
+      <p class="card-sub" id="resultMessage"></p>
+    </div>
+  </div>
+  <div class="grid grid-4" style="margin-bottom:12px">
+    <div class="stat t-total"><div class="stat-value" data-stat="total">0</div><div class="stat-label">Total</div></div>
+    <div class="stat t-ok"><div class="stat-value" data-stat="matched">0</div><div class="stat-label">Matched</div></div>
+    <div class="stat t-warn"><div class="stat-value" data-stat="needs-review">0</div><div class="stat-label">Needs review</div></div>
+    <div class="stat t-skip"><div class="stat-value" data-stat="pending">0</div><div class="stat-label">Pending</div></div>
+  </div>
+  <div class="row">
+    <a class="btn btn-primary" href="{{ url_for('review_page') }}"><svg class="icon"><use href="#i-check-circle"></use></svg> Start reviewing</a>
+    <a class="btn" href="{{ url_for('records_page') }}"><svg class="icon"><use href="#i-list"></use></svg> See all records</a>
+    <a class="btn" href="{{ url_for('dashboard') }}"><svg class="icon"><use href="#i-chart"></use></svg> Dashboard</a>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

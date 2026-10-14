@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+    <div>
+      <h1 class="h2">Reports</h1>
+      <p class="card-sub">Download an Excel report you can show your supervisor. Patient data never leaves this phone.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card" style="box-shadow:none;background:var(--surface-2)">
+      <h3>Report for the current file</h3>
+      <p class="small muted">
+        Sheets: Completed · Pending · Matched · Needs Review · Approved · Failed · Skipped ·
+        Save Status Unknown · All Records
+      </p>
+      <div class="row">
+        <button class="btn btn-primary btn-sm" id="makeSessionReport">
+          <svg class="icon"><use href="#i-file"></use></svg> Create Excel report
+        </button>
+        <button class="btn btn-sm" id="makeCsv">CSV export</button>
+      </div>
+    </div>
+
+    <div class="card" style="box-shadow:none;background:var(--surface-2)">
+      <h3>Overview report</h3>
+      <p class="small muted">Every uploaded file together, with the same sheets plus a Sessions summary sheet.</p>
+      <button class="btn btn-sm" id="makeOverviewReport">
+        <svg class="icon"><use href="#i-chart"></use></svg> Create overview report
+      </button>
+    </div>
+  </div>
+
+  <p class="tiny muted" style="margin-top:10px">
+    Reports contain: Excel row number, beneficiary name, status, validation result, match result,
+    review decision, error message and processing timestamps. Passwords and OTP values never appear
+    because the app never stores them at all.
+  </p>
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-download"></use></svg></span>
+    <div>
+      <h3>Downloadable files</h3>
+      <p class="card-sub">Stored in the reports/ folder on this device</p>
+    </div>
+  </div>
+
+  {% if all_reports %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>File</th><th>Kind</th><th>Rows</th><th>Size</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+        {% for report in all_reports %}
+        <tr>
+          <td>
+            <strong class="small">{{ report.filename }}</strong>
+            <div class="tiny muted">{{ report.scope }}</div>
+          </td>
+          <td><span class="chip tiny">{{ report.kind|upper }}</span></td>
+          <td class="num">{{ report.rows_count }}</td>
+          <td class="num">{{ report.size_bytes|filesize }}</td>
+          <td class="tiny">{{ report.created_at }}{% if not report.exists %}<br><span style="color:var(--bad)">file missing</span>{% endif %}</td>
+          <td class="right nowrap">
+            {% if report.exists %}
+            <a class="btn btn-sm" href="{{ url_for('report_download', filename=report.filename) }}">Download</a>
+            {% endif %}
+            <button class="btn btn-sm btn-outline-danger js-delete-report" data-report="{{ report.id }}">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-file"></use></svg></div>
+    <h3>No reports yet</h3>
+    <p>Create your first report after reviewing some records.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-chart"></use></svg></span>
+    <div><h3>Current file at a glance</h3><p class="card-sub">Counts included in the report cover sheet</p></div>
+  </div>
+  <div class="grid grid-4">
+    <div class="stat t-total"><div class="stat-value">{{ status_counts.TOTAL }}</div><div class="stat-label">Total</div></div>
+    <div class="stat t-done"><div class="stat-value">{{ status_counts.COMPLETED }}</div><div class="stat-label">Completed</div></div>
+    <div class="stat t-ok"><div class="stat-value">{{ status_counts.APPROVED }}</div><div class="stat-label">Approved</div></div>
+    <div class="stat t-warn"><div class="stat-value">{{ status_counts['NEEDS REVIEW'] }}</div><div class="stat-label">Needs review</div></div>
+    <div class="stat t-skip"><div class="stat-value">{{ status_counts.SKIPPED }}</div><div class="stat-label">Skipped</div></div>
+    <div class="stat t-bad"><div class="stat-value">{{ status_counts.FAILED }}</div><div class="stat-label">Failed</div></div>
+    <div class="stat t-unknown"><div class="stat-value">{{ status_counts['SAVE STATUS UNKNOWN'] }}</div><div class="stat-label">Save unknown</div></div>
+    <div class="stat t-total"><div class="stat-value">{{ status_counts.PROGRESS }}%</div><div class="stat-label">Progress</div></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const sessionId = {{ active_session.id if active_session else 'null' }};
+
+  async function makeReport(url, body, button) {
+    UWIN.setBusy(button, true, "Creating…");
+    try {
+      const data = await UWIN.api(url, { method: "POST", body: body });
+      if (data.ok) {
+        UWIN.toast("success", data.message + " Downloading…", "Report ready");
+        window.location.href = "/reports/download/" + encodeURIComponent(data.filename);
+        setTimeout(() => window.location.reload(), 1600);
+      }
+    } finally {
+      UWIN.setBusy(button, false);
+    }
+  }
+
+  const makeSession = document.getElementById("makeSessionReport");
+  const makeOverview = document.getElementById("makeOverviewReport");
+  const makeCsv = document.getElementById("makeCsv");
+
+  UWIN.onClick(makeSession, () => makeReport("/api/reports/session", { session_id: sessionId }, makeSession));
+  UWIN.onClick(makeOverview, () => makeReport("/api/reports/overview", {}, makeOverview));
+  UWIN.onClick(makeCsv, () => makeReport("/api/reports/export", { session_id: sessionId }, makeCsv));
+
+  UWIN.qsa(".js-delete-report").forEach((button) => {
+    UWIN.onClick(button, async () => {
+      const ok = await UWIN.confirm({
+        title: "Delete this report?",
+        text: "The file will be removed from this phone. Your records stay as they are.",
+        confirmText: "Delete report",
+        danger: true,
+      });
+      if (!ok) return;
+      const data = await UWIN.api("/api/reports/" + button.dataset.report + "/delete", { method: "POST" });
+      if (data.ok) {
+        UWIN.toast("success", data.message, "Deleted");
+        setTimeout(() => window.location.reload(), 700);
+      }
+    });
+  });
+</script>
+{% endblock %}

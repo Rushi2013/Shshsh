@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card" style="max-width:420px;margin:6vh auto 0;text-align:center">
+  <div class="empty-icon" style="margin:0 auto 12px;width:56px;height:56px;border-radius:18px;display:grid;place-items:center;background:var(--brand-50);color:var(--brand-600)">
+    <svg class="icon icon-lg"><use href="#i-lock"></use></svg>
+  </div>
+  <h1 class="h2">Dashboard locked</h1>
+  <p class="small muted">Enter your PIN to open the U-WIN Smart Assistant. Your data stays on this phone.</p>
+
+  <form id="pinForm" style="margin-top:14px">
+    <div class="field">
+      <label for="pin" class="visually-hidden">PIN</label>
+      <input class="input center mono" id="pin" type="password" inputmode="numeric" maxlength="8"
+             placeholder="• • • •" autocomplete="off" autofocus>
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">
+      <svg class="icon"><use href="#i-lock"></use></svg> Unlock dashboard
+    </button>
+  </form>
+  <p class="tiny muted" style="margin-top:12px">
+    Forgot the PIN? You must edit <span class="mono">data/uwin_assistant.db</span> (settings table) or reinstall.
+  </p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const form = document.getElementById("pinForm");
+  const input = document.getElementById("pin");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const pin = input.value.trim();
+    if (!pin) return;
+    const data = await UWIN.api("/api/pin/unlock", { method: "POST", body: { pin } });
+    if (data.ok) {
+      UWIN.toast("success", data.message, "Unlocked");
+      window.location.href = data.redirect || "/";
+    } else {
+      input.value = "";
+    }
+  });
+</script>
+{% endblock %}

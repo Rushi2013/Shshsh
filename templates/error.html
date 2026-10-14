@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="error-state">
+    <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-alert"></use></svg></div>
+    <h1 class="h2">{{ title }}</h1>
+    <p>{{ message }}</p>
+    {% if hint %}<p class="note small" style="display:inline-block">{{ hint }}</p>{% endif %}
+    <div class="row" style="justify-content:center;margin-top:12px">
+      <a class="btn btn-primary" href="{{ url_for('dashboard') }}"><svg class="icon"><use href="#i-home"></use></svg> Back to dashboard</a>
+      <a class="btn" href="{{ url_for('help_page') }}"><svg class="icon"><use href="#i-info"></use></svg> Troubleshooting</a>
+    </div>
+    <p class="tiny muted mono" style="margin-top:12px">Error code {{ code }}</p>
+  </div>
+</section>
+{% endblock %}

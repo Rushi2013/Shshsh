@@ -1,0 +1,22 @@
+# ---- runtime / private data (never commit patient data) ----
+data/
+uploads/*
+!uploads/.gitkeep
+reports/*
+!reports/.gitkeep
+logs/*
+!logs/.gitkeep
+secrets/
+*.db
+*.db-wal
+*.db-shm
+
+# ---- example files ARE committed (handy to download from GitHub) ----
+# sample_data/*.xlsx stays tracked on purpose; setup.sh regenerates them if missing.
+
+# ---- python ----
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/

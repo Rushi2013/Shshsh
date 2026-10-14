@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-clock"></use></svg></span>
+    <div>
+      <h1 class="h2">Processing history</h1>
+      <p class="card-sub">Every upload, decision and save attempt is stored locally so you can recover after a restart.</p>
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-sm" id="cleanupBtn"><svg class="icon"><use href="#i-refresh"></use></svg> Cleanup now</button>
+    </div>
+  </div>
+
+  <div class="grid grid-4">
+    <div class="stat t-total"><div class="stat-value">{{ status_counts.TOTAL }}</div><div class="stat-label">Rows in this file</div></div>
+    <div class="stat t-done"><div class="stat-value">{{ status_counts.COMPLETED }}</div><div class="stat-label">Completed</div></div>
+    <div class="stat t-warn"><div class="stat-value">{{ status_counts['NEEDS REVIEW'] }}</div><div class="stat-label">Needs review</div></div>
+    <div class="stat t-unknown"><div class="stat-value">{{ status_counts['SAVE STATUS UNKNOWN'] }}</div><div class="stat-label">Unknown saves</div></div>
+  </div>
+</section>
+
+{% if resumable %}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-refresh"></use></svg></span>
+    <div>
+      <h3>Resume previous session</h3>
+      <p class="card-sub">Open work that was left in the middle. Completed records are never processed again.</p>
+    </div>
+  </div>
+  <div class="reclist">
+    {% for item in resumable %}
+    <button class="rec js-activate" data-session="{{ item.id }}" type="button" style="width:100%;text-align:left">
+      <span class="rec-order"><svg class="icon icon-sm"><use href="#i-file"></use></svg></span>
+      <span class="rec-body">
+        <span class="rec-title"><strong>{{ item.original_filename }}</strong><span class="badge s-pending">{{ item.outstanding }} open</span></span>
+        <span class="rec-meta"><span>{{ item.TOTAL }} rows</span><span>{{ item.progress }}% done</span><span>last change {{ item.updated_at }}</span></span>
+      </span>
+      <svg class="icon"><use href="#i-arrow-right"></use></svg>
+    </button>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="grid grid-2" style="margin-top:var(--gap)">
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+      <div><h3>Uploaded files</h3><p class="card-sub">Kept until you delete them</p></div>
+    </div>
+    {% if sessions %}
+    <div class="table-wrap">
+      <table class="data" style="min-width:520px">
+        <thead><tr><th>File</th><th>Rows</th><th>Done</th><th>Open</th><th></th></tr></thead>
+        <tbody>
+          {% for item in sessions %}
+          <tr>
+            <td><strong class="small">{{ item.original_filename }}</strong><div class="tiny muted">{{ item.created_at }}</div></td>
+            <td class="num">{{ item.TOTAL }}</td>
+            <td class="num">{{ item.COMPLETED }}</td>
+            <td class="num">{{ item['NEEDS REVIEW'] + item.PENDING + item.MATCHED + item.APPROVED }}</td>
+            <td class="right nowrap">
+              <button class="btn btn-sm js-activate" data-session="{{ item.id }}">Open</button>
+              <button class="btn btn-sm btn-outline-danger js-delete-session" data-session="{{ item.id }}"
+                      data-name="{{ item.original_filename }}">Delete</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-file"></use></svg></div>
+      <h3>No files yet</h3>
+      <p>Uploaded Excel files will be listed here.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+      <div><h3>Activity log</h3><p class="card-sub">No patient names and no credentials are logged</p></div>
+    </div>
+    {% if events %}
+    <ul class="list-plain timeline">
+      {% for event in events %}
+      <li class="l-{{ event.level }}">
+        <strong class="small">{{ event.event.replace('_',' ')|capitalize }}</strong>
+        <div class="small">{{ event.message }}</div>
+        <div class="tiny muted">{{ event.ts }}{% if event.session_id %} · session #{{ event.session_id }}{% endif %}{% if event.record_id %} · record #{{ event.record_id }}{% endif %}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon"><svg class="icon icon-lg"><use href="#i-clock"></use></svg></div>
+      <h3>Nothing logged yet</h3>
+      <p>Actions appear here as you work.</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if reports %}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-file"></use></svg></span>
+    <div><h3>Recent reports</h3><p class="card-sub">Created from this file</p></div>
+    <div class="card-actions"><a class="btn btn-sm" href="{{ url_for('reports_page') }}">All reports</a></div>
+  </div>
+  <ul class="list-plain">
+    {% for report in reports %}
+    <li class="row between">
+      <span class="grow">{{ report.filename }} <span class="tiny muted">· {{ report.rows_count }} rows · {{ report.created_at }}</span></span>
+      <a class="btn btn-sm" href="{{ url_for('report_download', filename=report.filename) }}">Download</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script>
+  const cleanupBtn = document.getElementById("cleanupBtn");
+  UWIN.onClick(cleanupBtn, async () => {
+    const data = await UWIN.api("/api/settings/cleanup", { method: "POST" });
+    if (data.ok) UWIN.toast("success", data.message, "Cleanup done");
+  }, "Cleaning…");
+</script>
+{% endblock %}

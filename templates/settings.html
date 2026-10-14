@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form id="settingsForm">
+<section class="card">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-cog"></use></svg></span>
+    <div>
+      <h1 class="h2">Settings</h1>
+      <p class="card-sub">All settings are stored in a small local file on this phone.</p>
+    </div>
+    <div class="card-actions"><span class="chip" id="saveState">Not saved yet</span></div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="field">
+      <label for="theme">Dashboard theme</label>
+      <select class="select" id="theme" name="theme">
+        <option value="light" {{ 'selected' if settings.theme == 'light' }}>Light (white/blue)</option>
+        <option value="dark" {{ 'selected' if settings.theme == 'dark' }}>Dark</option>
+        <option value="system" {{ 'selected' if settings.theme == 'system' }}>Follow phone setting</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="date_format">Date format for display &amp; validation</label>
+      <select class="select" id="date_format" name="date_format">
+        {% for value, label in date_formats %}
+        <option value="{{ value }}" {{ 'selected' if settings.date_format == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <span class="hint">If a date is unclear (like 03/04/2025), the app asks you instead of guessing.</span>
+    </div>
+    <div class="field">
+      <label for="max_upload_mb">Upload size limit (MB)</label>
+      <input class="input" id="max_upload_mb" name="max_upload_mb" type="number" min="1" max="25"
+             value="{{ settings.max_upload_mb }}" inputmode="numeric">
+      <span class="hint">Keep it small on a phone. Big files slow down the browser.</span>
+    </div>
+    <div class="field">
+      <label for="rows_per_page">Rows shown per page</label>
+      <input class="input" id="rows_per_page" name="rows_per_page" type="number" min="10" max="100"
+             value="{{ settings.rows_per_page }}" inputmode="numeric">
+      <span class="hint">Pagination keeps the dashboard fast on a mobile screen.</span>
+    </div>
+    <div class="field">
+      <label for="report_format">Report export format</label>
+      <select class="select" id="report_format" name="report_format">
+        <option value="xlsx" {{ 'selected' if settings.report_format == 'xlsx' }}>Excel (.xlsx, several sheets)</option>
+        <option value="csv" {{ 'selected' if settings.report_format == 'csv' }}>CSV (single table)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="cleanup_days">Delete files older than (days)</label>
+      <input class="input" id="cleanup_days" name="cleanup_days" type="number" min="0" max="365"
+             value="{{ settings.cleanup_days }}" inputmode="numeric">
+      <span class="hint">0 = never delete automatically. You can always clean up by hand below.</span>
+    </div>
+  </div>
+
+  <div class="check-row">
+    <input type="checkbox" id="auto_recovery" name="auto_recovery" {{ 'checked' if settings.auto_recovery }}>
+    <label class="check-text" for="auto_recovery">
+      <strong>Automatic session recovery</strong>
+      <span>On restart, show "Resume previous session" and never repeat a completed record or an unconfirmed save.</span>
+    </label>
+  </div>
+  <div class="check-row">
+    <input type="checkbox" id="confirm_before_save" name="confirm_before_save" {{ 'checked' if settings.confirm_before_save }}>
+    <label class="check-text" for="confirm_before_save">
+      <strong>Always ask before any portal save</strong>
+      <span>Recommended. Keep this on so nothing is ever sent without your explicit approval.</span>
+    </label>
+  </div>
+  <div class="check-row">
+    <input type="checkbox" id="report_include_warnings" name="report_include_warnings" {{ 'checked' if settings.report_include_warnings }}>
+    <label class="check-text" for="report_include_warnings">
+      <strong>Include validation warning text in reports</strong>
+      <span>Turn off for a short report with only counts.</span>
+    </label>
+  </div>
+  <div class="check-row">
+    <input type="checkbox" id="keep_original_file" name="keep_original_file" {{ 'checked' if settings.keep_original_file }}>
+    <label class="check-text" for="keep_original_file">
+      <strong>Keep the uploaded Excel file on the phone</strong>
+      <span>Needed to re-read a row later. Turn off for strictest data minimisation.</span>
+    </label>
+  </div>
+  <div class="check-row">
+    <input type="checkbox" id="delete_session_on_complete" name="delete_session_on_complete" {{ 'checked' if settings.delete_session_on_complete }}>
+    <label class="check-text" for="delete_session_on_complete">
+      <strong>Delete a session automatically when it is 100% complete</strong>
+      <span>Privacy friendly, but the report becomes the only copy of that work.</span>
+    </label>
+  </div>
+
+  <div class="actions-sticky" style="margin-top:14px">
+    <button class="btn btn-primary grow" type="submit"><svg class="icon"><use href="#i-check"></use></svg> Save settings</button>
+    <button class="btn" type="button" id="resetBtn">Reset to defaults</button>
+  </div>
+</section>
+</form>
+
+{# ================= register ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-users"></use></svg></span>
+    <div>
+      <h3>Beneficiary register (for matching)</h3>
+      <p class="card-sub">
+        {% if register.count %}
+          {{ register.count }} authorised record(s) · {{ register.source_file }} · {{ register.imported_at }}
+        {% else %}
+          Not imported yet — the matching engine needs it to compare names and IDs
+        {% endif %}
+      </p>
+    </div>
+  </div>
+  <div class="dropzone" id="registerDrop" role="button" tabindex="0">
+    <div class="dz-icon"><svg class="icon icon-lg"><use href="#i-users"></use></svg></div>
+    <strong id="registerName">Choose register file (.xlsx, .xls, .csv)</strong>
+    <span>The register stays on this device. Demo file: sample_data/UWIN-sample-register.xlsx</span>
+  </div>
+  <input type="file" id="registerInput" accept=".xlsx,.xls,.csv" hidden>
+  <div class="row" style="margin-top:10px">
+    <button class="btn btn-primary btn-sm" id="registerImport"><svg class="icon"><use href="#i-upload"></use></svg> Import register</button>
+    {% if register.count %}<button class="btn btn-sm btn-outline-danger" id="registerClear">Clear register</button>{% endif %}
+  </div>
+</section>
+
+{# ================= portal ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-shield"></use></svg></span>
+    <div>
+      <h3>U-WIN portal workflow</h3>
+      <p class="card-sub">Assisted (manual) mode is the default and always works. An approved API is optional.</p>
+    </div>
+    <div class="card-actions"><span class="badge {{ 's-matched' if settings.portal_mode == 'adapter' and adapter.enabled else 's-pending' }}">
+      {{ 'Approved API' if adapter.enabled else 'Assisted mode' }}</span></div>
+  </div>
+
+  <div class="field">
+    <label for="portal_mode">Mode</label>
+    <select class="select" id="portal_mode" name="portal_mode">
+      <option value="assisted" {{ 'selected' if settings.portal_mode == 'assisted' }}>Assisted — I open the portal and confirm myself (recommended)</option>
+      <option value="adapter" {{ 'selected' if settings.portal_mode == 'adapter' }}>Approved API — my department gave me an official endpoint</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="portal_adapter_url">Approved integration URL (optional)</label>
+    <input class="input" id="portal_adapter_url" name="portal_adapter_url" value="{{ settings.portal_adapter_url }}"
+           placeholder="https://api.example.gov.in/uwin-adapter" autocomplete="off">
+    <span class="hint">Only put a URL here if your department/NIC has approved it in writing. The app never reverse-engineers private endpoints.</span>
+  </div>
+
+  <div class="field">
+    <label for="adapterToken">Integration token (stored in a local file, never in the database)</label>
+    <input class="input" id="adapterToken" type="password" autocomplete="off" placeholder="leave empty to keep the current token">
+    <span class="hint">Kept in <span class="mono">secrets/portal_adapter_token.txt</span> with 600 permissions.</span>
+  </div>
+
+  <div class="row">
+    <button class="btn btn-sm" type="button" id="testAdapter"><svg class="icon"><use href="#i-refresh"></use></svg> Test connection</button>
+    <button class="btn btn-sm" type="button" id="disableAdapter">Disable approved API</button>
+    <a class="btn btn-sm" href="{{ url_for('portal_page') }}"><svg class="icon"><use href="#i-external"></use></svg> Login assistant</a>
+  </div>
+
+  <div class="note small" style="margin-top:10px">
+    Portal: <span class="mono">{{ portal_url }}</span><br>
+    The app opens this page in your browser. You type the mobile number, password and the SMS OTP yourself.
+    The app never reads SMS, never bypasses the OTP or CAPTCHA, and never stores your password.
+  </div>
+  {% if settings.last_portal_open %}
+  <p class="tiny muted" style="margin-top:8px">Last time the portal was opened from here: {{ settings.last_portal_open }}</p>
+  {% endif %}
+</section>
+
+{# ================= PIN ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-lock"></use></svg></span>
+    <div>
+      <h3>Phone lock for the dashboard</h3>
+      <p class="card-sub">Good when more than one person uses this phone.</p>
+    </div>
+    <div class="card-actions"><span class="badge {{ 's-completed' if settings.pin_lock_enabled else 's-pending' }}">
+      {{ 'PIN lock on' if settings.pin_lock_enabled else 'PIN lock off' }}</span></div>
+  </div>
+  <div class="grid grid-2">
+    <div class="field">
+      <label for="pinInput">{{ 'New PIN' if settings.pin_lock_enabled else 'Set a PIN (4-8 digits)' }}</label>
+      <input class="input" id="pinInput" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label for="pinCurrent">Current PIN (only when changing)</label>
+      <input class="input" id="pinCurrent" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn btn-sm btn-primary" type="button" id="pinSave">Set / change PIN</button>
+    <button class="btn btn-sm" type="button" id="pinRemove">Remove PIN</button>
+  </div>
+  <p class="tiny muted" style="margin-top:8px">
+    A forgotten PIN cannot be recovered — you would need to reinstall or edit
+    <span class="mono">data/uwin_assistant.db</span>. Keep a note somewhere safe.
+  </p>
+</section>
+
+{# ================= privacy ================= #}
+<section class="card" style="margin-top:var(--gap);border-color:var(--bad)">
+  <div class="card-head">
+    <span class="head-icon" style="background:var(--bad-bg);color:var(--bad)"><svg class="icon"><use href="#i-trash"></use></svg></span>
+    <div>
+      <h3>Privacy &amp; local data</h3>
+      <p class="card-sub">Vaccination data is sensitive. Delete it when your work for the day is finished.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-2">
+    <div class="card" style="box-shadow:none;background:var(--surface-2)">
+      <h3>Clean up safely</h3>
+      <ul class="list-plain small">
+        <li>Delete old uploaded files (older than 7 days, unreferenced).</li>
+        <li>Apply your "delete files older than X days" setting.</li>
+        <li>Delete sessions where every record is complete (if enabled).</li>
+      </ul>
+      <button class="btn btn-sm" type="button" id="cleanupBtn"><svg class="icon"><use href="#i-refresh"></use></svg> Run cleanup now</button>
+      <button class="btn btn-sm" type="button" id="purgeUploadsBtn" style="margin-top:8px"><svg class="icon"><use href="#i-trash"></use></svg> Remove leftover upload files</button>
+    </div>
+    <div class="card" style="box-shadow:none;background:var(--bad-bg)">
+      <h3 style="color:var(--bad)">Delete ALL local data</h3>
+      <p class="small">Removes: every session, every record, the imported register, all reports and uploaded files, and the activity log. This cannot be undone.</p>
+      <button class="btn btn-danger btn-sm" type="button" id="wipeBtn"><svg class="icon"><use href="#i-trash"></use></svg> Delete everything</button>
+    </div>
+  </div>
+</section>
+
+{# ================= app info ================= #}
+<section class="card" style="margin-top:var(--gap)">
+  <div class="card-head">
+    <span class="head-icon"><svg class="icon"><use href="#i-info"></use></svg></span>
+    <div><h3>Application information &amp; diagnostics</h3><p class="card-sub">Useful when something does not work</p></div>
+  </div>
+  <div class="grid grid-2">
+    <div>
+      <div class="kv"><span>Application</span><span>{{ app_title }} v{{ app_version }}</span></div>
+      <div class="kv"><span>Build date</span><span>{{ diagnostics.version }}</span></div>
+      <div class="kv"><span>Dashboard URL</span><span class="mono">{{ diagnostics.dashboard_url }}</span></div>
+      <div class="kv"><span>Python</span><span>{{ diagnostics.python }}</span></div>
+      <div class="kv"><span>Flask</span><span>{{ diagnostics.flask }}</span></div>
+      <div class="kv"><span>pandas</span><span>{{ diagnostics.pandas }}</span></div>
+      <div class="kv"><span>openpyxl</span><span>{{ diagnostics.openpyxl }}</span></div>
+      <div class="kv"><span>xlrd (.xls support)</span><span>{{ diagnostics.xlrd }}</span></div>
+      <div class="kv"><span>Database size</span><span>{{ diagnostics.database_size|filesize }}</span></div>
+      <div class="kv"><span>Project folder</span><span class="mono">{{ diagnostics.base_dir }}</span></div>
+      <div class="kv"><span>Portal</span><span class="mono tiny">{{ portal_url }}</span></div>
+      <div class="kv"><span>Mode</span><span>{{ adapter.mode }}</span></div>
+    </div>
+    <div>
+      <h3>Browser opening instructions</h3>
+      <ol class="list-plain small">
+        <li>Keep the Termux window running (that is the server).</li>
+        <li>Open Chrome and go to <span class="mono">{{ diagnostics.dashboard_url }}</span>.</li>
+        <li>Or run in Termux: <span class="kbd">termux-open-url {{ diagnostics.dashboard_url }}</span></li>
+        <li>Add the page to the Chrome home screen for one-tap access.</li>
+        <li>To stop the server: <span class="kbd">bash stop.sh</span></li>
+      </ol>
+      <div class="note small" style="margin-top:10px">
+        The dashboard is served on <strong>localhost only</strong>. Other phones on the Wi-Fi cannot open it,
+        and it is never exposed to the internet.
+      </div>
+      <button class="btn btn-sm" type="button" id="runCheck" style="margin-top:10px">
+        <svg class="icon"><use href="#i-refresh"></use></svg> Re-run diagnostics
+      </button>
+      <div id="checkResult" class="tiny muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
