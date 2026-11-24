@@ -75,7 +75,7 @@ CREDITS.md                                      # model/source attribution
 
 ## Latest APK
 
-Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-15/CityDrive.apk
+Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-17/CityDrive.apk
 
 Fast raw download (hosted in repo): https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
 
