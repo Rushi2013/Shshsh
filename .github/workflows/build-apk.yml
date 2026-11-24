@@ -30,38 +30,6 @@ jobs:
           buildMethod: ProjectSetup.BuildAndroid
           allowDirtyBuild: true
 
-      - name: Publish failure details to the branch
-        if: failure()
-        run: |
-          set +e
-          curl -sSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/logs" -o /tmp/action-logs.zip
-          rm -rf /tmp/action-logs && mkdir -p /tmp/action-logs
-          unzip -o -q /tmp/action-logs.zip -d /tmp/action-logs
-          LOG=$(find /tmp/action-logs -type f -name '*Build APK with Unity*.txt' | head -n 1)
-          {
-            echo '# Build failure details'
-            echo '```'
-            if [ -n "$LOG" ]; then
-              grep -iE 'error CS|error:|exception|aborting|failed|could not|unable' "$LOG" | tail -n 60
-              echo '--- build method marker ---'
-              cat build_status.txt 2>/dev/null || echo 'BuildAndroid was never reached (script compilation likely failed).'
-              echo '--- log tail ---'
-              tail -n 80 "$LOG"
-            else
-              echo 'Unity step log not found in the downloaded archive.'
-              ls -R /tmp/action-logs | tail -n 40
-            fi
-            echo '```'
-          } > BUILD_ERROR.md
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add BUILD_ERROR.md
-          git commit -m "Publish APK build failure details" || true
-          git push || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

@@ -115,7 +115,6 @@ public static class ProjectSetup
     [MenuItem("CityDrive/Build Android APK")]
     public static void BuildAndroid()
     {
-        System.IO.File.WriteAllText("build_status.txt", "STARTED\n");
         EnsureProject();
 
         Directory.CreateDirectory("build/Android");
