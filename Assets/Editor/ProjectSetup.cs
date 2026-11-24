@@ -17,13 +17,7 @@ using UnityEngine.Rendering;
 public static class ProjectSetup
 {
     private const string ScenePath = "Assets/Scenes/CityDrive.unity";
-    private const string ApkPath = "build/CityDrive.apk";
-
-    [InitializeOnLoadMethod]
-    private static void OnEditorLoaded()
-    {
-        EnsureProject();
-    }
+    private const string ApkPath = "build/Android/Android.apk";
 
     [MenuItem("CityDrive/Setup Project")]
     public static void EnsureProject()
@@ -117,7 +111,7 @@ public static class ProjectSetup
     {
         EnsureProject();
 
-        Directory.CreateDirectory("build");
+        Directory.CreateDirectory("build/Android");
         if (File.Exists(ApkPath)) File.Delete(ApkPath);
 
         BuildPlayerOptions options = new BuildPlayerOptions
@@ -137,6 +131,8 @@ public static class ProjectSetup
                                 " (" + summary.totalErrors + " errors)");
         }
 
+        // Keep the name GameCI expects, plus a friendly copy for the artifact upload.
+        File.Copy(ApkPath, "build/CityDrive.apk", true);
         Debug.Log("[CityDrive] APK built: " + ApkPath + " (" + summary.totalSize / 1024 / 1024 + " MB)");
     }
 }

@@ -58,7 +58,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CityDrive-APK
-          path: build/*.apk
+          path: build/**/*.apk
           if-no-files-found: error
 
       - name: Publish APK on the Releases page
@@ -69,4 +69,4 @@ jobs:
           body: |
             Unity-built Android APK of the open-world BMW city driving game.
             Download `CityDrive.apk` on your phone, enable "Install unknown apps", and install.
-          files: build/*.apk
+          files: build/**/*.apk

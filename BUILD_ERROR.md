@@ -1,4 +1,0 @@
-# Build failure details
-
-```
-```
