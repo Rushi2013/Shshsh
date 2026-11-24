@@ -3,74 +3,86 @@ using UnityEngine;
 namespace CityDrive
 {
     /// <summary>
-    /// Spins and steers the original BMW wheel meshes that come with the model.
-    /// Wheels are matched by the names used by the asset (WheelFL, WheelFR, ...).
+    /// Keeps the imported BMW wheel meshes in sync with the simulated wheels.
+    /// Supports separate Ackermann angles per front wheel and an optional 3D
+    /// interior steering wheel that follows the same steering input.
     /// </summary>
     public sealed class VehicleVisuals : MonoBehaviour
     {
-        private Transform _frontLeft;
-        private Transform _frontRight;
-        private Transform _rearLeft;
-        private Transform _rearRight;
-
-        private Quaternion _frontLeftBase;
-        private Quaternion _frontRightBase;
-        private Quaternion _rearLeftBase;
-        private Quaternion _rearRightBase;
+        private readonly Transform[] _wheels = new Transform[4]; // 0=FL, 1=FR, 2=RL, 3=RR
+        private readonly Quaternion[] _baseRotations = new Quaternion[4];
         private bool _spinAroundLocalZ;
+
+        private Transform _interiorWheel;
+        private Quaternion _interiorBaseRotation;
 
         public void FindWheels(Transform modelRoot)
         {
-            Transform[] all = modelRoot.GetComponentsInChildren<Transform>(true);
-            foreach (Transform t in all)
+            if (modelRoot == null) return;
+            foreach (Transform t in modelRoot.GetComponentsInChildren<Transform>(true))
             {
-                switch (t.name)
-                {
-                    case "WheelFL": _frontLeft = t; break;
-                    case "WheelFR": _frontRight = t; break;
-                    case "WheelRL": _rearLeft = t; break;
-                    case "WheelRR": _rearRight = t; break;
-                    // 2025 BMW 330i xDrive GLB node names.
-                    case "polySurface4": _frontLeft = t; _spinAroundLocalZ = true; break;
-                    case "polySurface3": _frontRight = t; _spinAroundLocalZ = true; break;
-                    case "polySurface2": _rearLeft = t; _spinAroundLocalZ = true; break;
-                    case "polySurface1": _rearRight = t; _spinAroundLocalZ = true; break;
-                }
+                int index = WheelIndex(t.name);
+                if (index < 0) continue;
+                _wheels[index] = t;
+                _baseRotations[index] = t.localRotation;
+                if (t.name.StartsWith("polySurface")) _spinAroundLocalZ = true;
             }
-
-            if (_frontLeft != null) _frontLeftBase = _frontLeft.localRotation;
-            if (_frontRight != null) _frontRightBase = _frontRight.localRotation;
-            if (_rearLeft != null) _rearLeftBase = _rearLeft.localRotation;
-            if (_rearRight != null) _rearRightBase = _rearRight.localRotation;
         }
 
-        /// <summary>Steers around the car's real up axis, even if the model is mirrored.</summary>
+        private static int WheelIndex(string name)
+        {
+            switch (name)
+            {
+                case "WheelFL":
+                case "polySurface4": return 0;
+                case "WheelFR":
+                case "polySurface3": return 1;
+                case "WheelRL":
+                case "polySurface2": return 2;
+                case "WheelRR":
+                case "polySurface1": return 3;
+                default: return -1;
+            }
+        }
+
+        public void SetInteriorWheel(Transform wheel)
+        {
+            _interiorWheel = wheel;
+            if (wheel != null) _interiorBaseRotation = wheel.localRotation;
+        }
+
+        /// <summary>Converts a steering angle around the car's up axis into wheel-local space.</summary>
         private static Quaternion SteerInWheelSpace(Transform wheel, float degrees)
         {
-            if (wheel == null) return Quaternion.identity;
+            if (wheel == null || Mathf.Abs(degrees) < 0.001f) return Quaternion.identity;
             Quaternion worldSteer = Quaternion.AngleAxis(degrees, wheel.root.up);
             Transform parent = wheel.parent;
             if (parent == null) return worldSteer;
             return Quaternion.Inverse(parent.rotation) * worldSteer * parent.rotation;
         }
 
-        public void UpdateWheels(float steerDegrees, float spinDegrees)
+        public void UpdateWheels(float frontLeftSteer, float frontRightSteer,
+            float rearLeftSteer, float rearRightSteer, float[] spinDegrees)
         {
-            Quaternion roll = Quaternion.AngleAxis(spinDegrees,
-                _spinAroundLocalZ ? Vector3.forward : Vector3.right);
+            float[] steer = { frontLeftSteer, frontRightSteer, rearLeftSteer, rearRightSteer };
 
-            if (_frontLeft != null)
+            for (int i = 0; i < 4; i++)
             {
-                Quaternion steer = SteerInWheelSpace(_frontLeft, steerDegrees);
-                _frontLeft.localRotation = steer * _frontLeftBase * roll;
+                Transform wheel = _wheels[i];
+                if (wheel == null) continue;
+                float spin = spinDegrees != null && i < spinDegrees.Length ? spinDegrees[i] : 0f;
+                Quaternion roll = Quaternion.AngleAxis(spin,
+                    _spinAroundLocalZ ? Vector3.forward : Vector3.right);
+                Quaternion localSteer = SteerInWheelSpace(wheel, steer[i]);
+                wheel.localRotation = localSteer * _baseRotations[i] * roll;
             }
-            if (_frontRight != null)
+
+            if (_interiorWheel != null)
             {
-                Quaternion steer = SteerInWheelSpace(_frontRight, steerDegrees);
-                _frontRight.localRotation = steer * _frontRightBase * roll;
+                float averageSteer = (frontLeftSteer + frontRightSteer) * 0.5f;
+                _interiorWheel.localRotation = _interiorBaseRotation *
+                    Quaternion.AngleAxis(averageSteer, Vector3.forward);
             }
-            if (_rearLeft != null) _rearLeft.localRotation = _rearLeftBase * roll;
-            if (_rearRight != null) _rearRight.localRotation = _rearRightBase * roll;
         }
     }
 }

@@ -120,10 +120,91 @@ namespace CityDrive
 
             VehicleVisuals visuals = car.AddComponent<VehicleVisuals>();
             visuals.FindWheels(car.transform);
+            GameObject interiorWheel = CreateInteriorSteeringWheel(car.transform);
+            visuals.SetInteriorWheel(interiorWheel.transform);
 
             ArcadeCarController controller = car.AddComponent<ArcadeCarController>();
             controller.SetVisuals(visuals);
             return car;
+        }
+
+        /// <summary>Adds a small 3D driver steering wheel so interior view has visible steering feedback.</summary>
+        private static GameObject CreateInteriorSteeringWheel(Transform car)
+        {
+            GameObject wheel = new GameObject("Interior Steering Wheel");
+            wheel.transform.SetParent(car, false);
+            wheel.transform.localPosition = new Vector3(-0.34f, 0.36f, 0.52f);
+            wheel.transform.localRotation = Quaternion.Euler(-18f, 180f, 0f);
+
+            MeshFilter filter = wheel.AddComponent<MeshFilter>();
+            filter.sharedMesh = CreateTorusMesh(0.19f, 0.022f, 28, 8);
+            MeshRenderer renderer = wheel.AddComponent<MeshRenderer>();
+            Shader shader = Shader.Find("Standard");
+            Material material = shader != null ? new Material(shader) : null;
+            if (material != null)
+            {
+                material.color = new Color(0.07f, 0.08f, 0.09f);
+                renderer.material = material;
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                GameObject spoke = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                spoke.name = "Spoke";
+                spoke.transform.SetParent(wheel.transform, false);
+                float angle = i * 120f * Mathf.Deg2Rad;
+                spoke.transform.localPosition = new Vector3(
+                    Mathf.Cos(angle) * 0.095f, Mathf.Sin(angle) * 0.095f, 0f);
+                spoke.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg);
+                spoke.transform.localScale = new Vector3(0.19f, 0.016f, 0.016f);
+                if (material != null) spoke.GetComponent<Renderer>().material = material;
+            }
+            return wheel;
+        }
+
+        private static Mesh CreateTorusMesh(float radius, float tube, int segments, int sides)
+        {
+            Vector3[] vertices = new Vector3[segments * sides];
+            Vector3[] normals = new Vector3[vertices.Length];
+            int[] triangles = new int[segments * sides * 6];
+
+            for (int i = 0; i < segments; i++)
+            {
+                float u = i * Mathf.PI * 2f / segments;
+                float cu = Mathf.Cos(u);
+                float su = Mathf.Sin(u);
+                for (int j = 0; j < sides; j++)
+                {
+                    float v = j * Mathf.PI * 2f / sides;
+                    Vector3 normal = new Vector3(cu * Mathf.Cos(v), su * Mathf.Cos(v), Mathf.Sin(v));
+                    int index = i * sides + j;
+                    normals[index] = normal;
+                    vertices[index] = new Vector3(cu * radius, su * radius, 0f) + normal * tube;
+                }
+            }
+
+            int t = 0;
+            for (int i = 0; i < segments; i++)
+            {
+                int nextI = (i + 1) % segments;
+                for (int j = 0; j < sides; j++)
+                {
+                    int nextJ = (j + 1) % sides;
+                    int a = i * sides + j;
+                    int b = nextI * sides + j;
+                    int c = nextI * sides + nextJ;
+                    int d = i * sides + nextJ;
+                    triangles[t++] = a; triangles[t++] = b; triangles[t++] = c;
+                    triangles[t++] = a; triangles[t++] = c; triangles[t++] = d;
+                }
+            }
+
+            Mesh mesh = new Mesh { name = "Interior Steering Wheel Ring" };
+            mesh.vertices = vertices;
+            mesh.normals = normals;
+            mesh.triangles = triangles;
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         /// <summary>
