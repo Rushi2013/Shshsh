@@ -140,6 +140,8 @@ public static class ProjectSetup
         // Keep the name GameCI expects, plus a friendly copy for the artifact upload.
         File.Copy(ApkPath, "build/CityDrive.apk", true);
         Debug.Log("[CityDrive] APK built: " + ApkPath + " (" + summary.totalSize / 1024 / 1024 + " MB)");
+        // Exact marker GameCI's build validator looks for in the Unity output.
+        Debug.Log("Build succeeded!");
     }
 }
 #endif
