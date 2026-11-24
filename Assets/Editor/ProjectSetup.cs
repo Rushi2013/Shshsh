@@ -16,6 +16,12 @@ using UnityEngine.Rendering;
 /// </summary>
 public static class ProjectSetup
 {
+    [InitializeOnLoadMethod]
+    private static void OnEditorLoaded()
+    {
+        EnsureProject();
+    }
+
     private const string ScenePath = "Assets/Scenes/CityDrive.unity";
     private const string ApkPath = "build/Android/Android.apk";
 
