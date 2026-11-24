@@ -58,20 +58,29 @@ Play dabayein ya menu **CityDrive → Build Android APK**.
 ```
 Assets/
   Resources/City/city.glb                       # aapki uploaded file (extension .txt hata diya gaya)
-  Resources/Vehicles/BMW/                       # BMW M3 GTR + original .mat/.fbx/.meta references
+  Resources/Vehicles/BMW330i/bmw330i.glb        # naya BMW 330i xDrive model (aapki file)
+  Resources/UI/                                  # AI-generated loading/showroom background + icons
   Scripts/GameBootstrap.cs                      # entry point
   Scripts/CityBuilder.cs                        # GLB -> city + colliders + spawn point
   Scripts/ArcadeCarController.cs                # car physics
   Scripts/VehicleVisuals.cs                     # wheel spin/steer
-  Scripts/MobileControls.cs                     # touch UI
+  Scripts/MobileControls.cs                     # touch UI with AI icon sprites + speedometer
+  Scripts/LoadingScreen.cs                      # real-time yellow loading bar + percentage
+  Scripts/HomeScreen.cs                         # 3D rotating-car home screen + PLAY button
   Scripts/ChaseCamera.cs                        # camera modes
   Editor/ProjectSetup.cs                        # auto scene + APK build method
 .github/workflows/build-apk.yml                 # GitHub Actions -> APK + Release
 CREDITS.md                                      # model/source attribution
 ```
 
+## Latest APK
+
+Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-12/CityDrive.apk
+
+Loading screen ke baad 3D home screen aata hai — BMW circular stand par ghoomta hai, PLAY dabate hi car city road par spawn hoti hai. City GLB ko +90° X se upright kiya gaya hai aur spawn nearest road mesh par hota hai.
+
 ## Note
 
-- City model ~13 MB, car ~8 MB; APK expected size roughly 40–90 MB (textures + Unity runtime).
+- City model ~13 MB, naya car GLB ~10 MB; APK expected size roughly 40–90 MB (textures + Unity runtime).
 - Build ke liye Unity **Personal** licence required hai (free). CI me licence secret lagana zaroori hai.
 - Unity Cloud Build / GitHub Actions dono cloud me Unity chalate hain; isliye aapko PC ki zarurat nahi.
