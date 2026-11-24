@@ -1,0 +1,80 @@
+# Mobile-only route: generates a Unity Personal .ulf from the Unity account
+# credentials and stores it in the UNITY_LICENSE repository secret.
+# Community tool (not official Unity): game-ci/unity-license-activate.
+name: Get Unity License (no PC)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  secrets: write
+  actions: write
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free disk space for the Unity image
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+          tool-cache: false
+          swap-storage: false
+
+      - name: Generate Unity activation request (.alf)
+        run: |
+          mkdir -p license
+          docker run --rm --user root -v "$PWD/license:/license" -w /license \
+            unityci/editor:ubuntu-2022.3.62f3-base-3.2.2 \
+            unity-editor -quit -batchmode -nographics -logFile /dev/stdout -createManualActivationFile
+          echo "Files produced:"
+          ls -la license
+
+      - name: Locate .alf
+        id: alf
+        run: |
+          ALF=$(find "$PWD/license" -name '*.alf' -print -quit)
+          if [ -z "$ALF" ]; then echo "No .alf file was generated"; exit 1; fi
+          echo "path=$ALF" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install unity-license-activate
+        run: npm install --global unity-license-activate
+
+      - name: Exchange .alf for .ulf using Unity account
+        env:
+          UNITY_USER: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASS: ${{ secrets.UNITY_PASSWORD }}
+          TOTP_KEY: ${{ secrets.UNITY_TOTP_KEY }}
+          MAIL_PASS: ${{ secrets.EMAIL_PASSWORD }}
+          ALF_PATH: ${{ steps.alf.outputs.path }}
+        run: |
+          extra=""
+          if [ -n "$TOTP_KEY" ]; then extra="$extra --authenticator-key $TOTP_KEY"; fi
+          if [ -n "$MAIL_PASS" ]; then extra="$extra --email-password $MAIL_PASS"; fi
+          unity-license-activate "$UNITY_USER" "$UNITY_PASS" "$ALF_PATH" $extra
+
+      - name: Store .ulf as the UNITY_LICENSE secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ULF=$(find "$GITHUB_WORKSPACE" -name '*.ulf' -print -quit)
+          if [ -z "$ULF" ]; then echo "No .ulf file was produced by activation"; exit 1; fi
+          gh secret set UNITY_LICENSE < "$ULF"
+          echo "UNITY_LICENSE secret created from $(basename "$ULF")"
+
+      - name: Start the APK build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run "Build Android APK" --ref "$GITHUB_REF_NAME"
+          echo "APK build workflow triggered"

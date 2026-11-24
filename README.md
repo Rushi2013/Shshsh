@@ -24,12 +24,14 @@ raycast suspension physics, drifting, on-screen mobile controller aur poori city
 
 ### Option 1 — GitHub Actions (recommended)
 
-**Poori step-by-step guide:** [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md) — teen secrets kahan se laayein, kahan paste karein, build kaise chalayein, sab wahan hai.
+**Poori step-by-step guide:** [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md) — secrets kahan se laayein, kahan paste karein, build kaise chalayein, sab wahan hai.
 
-Short version:
-1. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**: `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD`.
-2. **Actions → Build Android APK → Run workflow**.
+**PC ke bina (pehle ye try karein):**
+1. GitHub → repo → **Settings → Secrets and variables → Actions** → sirf 2 secrets: `UNITY_EMAIL`, `UNITY_PASSWORD`.
+2. **Actions → Get Unity License (no PC) → Run workflow**. Ye apne aap `UNITY_LICENSE` banayega aur APK build start karega.
 3. Build ke baad **Releases** ya **Artifacts** se `CityDrive.apk` download karein.
+
+Agar licence tool fail ho to guide me Unity Hub wala official fallback bhi hai.
 
 ### Option 2 — Unity Cloud Build
 

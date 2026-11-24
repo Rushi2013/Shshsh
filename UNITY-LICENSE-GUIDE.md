@@ -8,7 +8,41 @@ Ye guide un teen secrets ke baare mein hai jo `.github/workflows/build-apk.yml` 
 | `UNITY_EMAIL` | Unity account ka email | https://id.unity.com |
 | `UNITY_PASSWORD` | Unity account ka password | https://id.unity.com ( agar Google/Apple se signup kiya tha to yahin "set password" karein ) |
 
-> **Sach ki baat:** Unity ab **Unity Personal ke liye manual activation (license.unity3d.com) support nahi karta**. Isliye `UNITY_LICENSE` banane ka official tarika sirf **Unity Hub** hai. Hub mobile par nahi chalta — aapko 5–10 minute ke liye kisi bhi PC/laptop (dost, library, cyber cafe) ki zarurat hogi. Poori Unity Editor install karne ki zarurat nahi, sirf Unity Hub.
+> **Sach ki baat:** Unity ab **Unity Personal ke liye manual activation (license.unity3d.com) support nahi karta**. Isliye `UNITY_LICENSE` banane ka official tarika sirf **Unity Hub** hai. Lekin niche ek **mobile-only community route** bhi hai jo GitHub Actions me try ki ja sakti hai.
+
+---
+
+## ⭐ Try this first — mobile-only automatic route (no PC)
+
+Maine aapke repo me `.github/workflows/get-unity-license.yml` bana diya hai. Ye GitHub ke cloud me:
+
+1. Unity 2022.3 Docker image se `.alf` activation request banata hai (licence ki zarurat nahi),
+2. community tool `unity-license-activate` se aapke Unity email/password se `.ulf` licence mangata hai,
+3. `.ulf` ko apne aap `UNITY_LICENSE` secret me save karta hai,
+4. aur **Build Android APK** workflow khud start kar deta hai.
+
+### Aapko sirf ye karna hai
+
+1. GitHub → ye repo → **Settings → Secrets and variables → Actions → New repository secret**.
+2. Sirf **do** secrets add karein:
+   - `UNITY_EMAIL` = aapka Unity login email
+   - `UNITY_PASSWORD` = aapka Unity password
+3. **Actions → Get Unity License (no PC) → Run workflow** → branch select karein → Run.
+4. Log me “UNITY_LICENSE secret created” aur “APK build workflow triggered” aaye to bas; ab **Build Android APK** run ke interest me APK aayega (Releases/Artifacts).
+
+### Agar 2FA on hai
+
+- Authenticator app ka **original TOTP key** ho to extra secret `UNITY_TOTP_KEY` add karein.
+- Email code aata ho to extra secret `EMAIL_PASSWORD` add karein (gmail/outlook/yahoo etc. ke liye IMAP allow hona chahiye).
+- Ye tool community-made hai aur Unity ke login page badalne par fail ho sakta hai. Fail hone par log ka last error line mujhe bhej dein.
+
+### 🔐 Security note
+
+Aapne password chat me likha hai — build complete hone ke baad **Unity account ka password badal dena** aur GitHub me `UNITY_PASSWORD` secret bhi update kar dena. Password ko kabhi workflow ya code me na likhein.
+
+### Agar ye route fail ho
+
+Tab official fallback sirf Unity Hub wala hai (neeche Step 1–4) — kisi bhi computer par sirf 5–10 minute.
 
 ---
 
