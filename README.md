@@ -24,20 +24,16 @@ raycast suspension physics, drifting, on-screen mobile controller aur poori city
 
 ### Option 1 — GitHub Actions (recommended)
 
-1. Phone/browser me GitHub → is repo → **Settings → Secrets and variables → Actions → New repository secret**.
-2. Teen secrets add karein:
-   - `UNITY_LICENSE` — Unity Hub se free Personal licence XML (`Unity → Help → Licensing → Re-activate licence → license.ulf` ki content).
-   - `UNITY_EMAIL` — aapka Unity account email.
-   - `UNITY_PASSWORD` — aapka Unity account password.
-3. **Actions** tab → **Build Android APK** → **Run workflow**.
-4. Build khatam hone par **Releases** me `CityDrive.apk` milta hai, ya workflow run ke **Artifacts** se download karein.
-5. Phone me APK open karein → “Install unknown apps” allow karein → install.
+**Poori step-by-step guide:** [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md) — teen secrets kahan se laayein, kahan paste karein, build kaise chalayein, sab wahan hai.
 
-### Option 2 — Unity Cloud Build (sirf browser)
+Short version:
+1. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**: `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD`.
+2. **Actions → Build Android APK → Run workflow**.
+3. Build ke baad **Releases** ya **Artifacts** se `CityDrive.apk` download karein.
 
-1. [cloud.unity.com](https://cloud.unity.com) par login karein, ye GitHub repo connect karein.
-2. New Target → Platform **Android**, project ye repo, build scene `Assets/Scenes/CityDrive.unity`.
-3. Build start karein; downloaded APK phone me install karein.
+### Option 2 — Unity Cloud Build
+
+Dashboard se repo connect karke Android target bana sakte hain, par cloud build automation Unity ke paid plans (Pro/Enterprise) ka feature hai; free Personal ke liye upar wala GitHub Actions tarika best hai.
 
 ### Option 3 — PC par Unity (agar aapke paas Unity ho)
 

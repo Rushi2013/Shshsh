@@ -1,10 +1,9 @@
 name: Build Android APK
 
+# Run manually from the Actions tab after the three Unity secrets are added.
+# See UNITY-LICENSE-GUIDE.md for where each secret comes from.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - '**'
 
 permissions:
   contents: write
