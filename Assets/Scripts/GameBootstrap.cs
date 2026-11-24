@@ -4,12 +4,14 @@ using UnityEngine;
 namespace CityDrive
 {
     /// <summary>
-    /// Entry point. Builds the town from the supplied GLB, spawns the BMW with full
-    /// rigidbody physics, attaches the cameras and creates the touch HUD at runtime.
+    /// Entry point. Shows a real-time loading screen, builds the city from the supplied
+    /// GLB, spawns the BMW 330i xDrive GLB with rigidbody physics, then presents a 3D
+    /// home screen. Pressing play drops the same car onto a city road.
     /// </summary>
     public sealed class GameBootstrap : MonoBehaviour
     {
-        private const string CarResource = "Vehicles/BMW/2005 BMW M3 GTR E46 - Empty";
+        private const string CarResource = "Vehicles/BMW330i/bmw330i";
+        private const float ModelScale = 90f;
 
         private IEnumerator Start()
         {
@@ -18,12 +20,23 @@ namespace CityDrive
             QualitySettings.shadowDistance = 90f;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
+            LoadingScreen loading = gameObject.AddComponent<LoadingScreen>();
+            loading.Show();
+            loading.SetProgress(0.05f, "GAME LOADING", "Checking game assets...");
+            yield return new WaitForSecondsRealtime(0.4f);
+
             GameObject cityHost = new GameObject("City Loader");
             CityBuilder city = cityHost.AddComponent<CityBuilder>();
+            loading.SetProgress(0.20f, "DOWNLOADING ASSETS", "Loading 3D city and textures...");
             yield return StartCoroutine(city.Build());
+            loading.SetProgress(0.62f, "BUILDING CITY", "Placing roads and buildings...");
+            yield return new WaitForSecondsRealtime(0.35f);
 
             Vector3 spawn = city.FindSpawnPoint();
-            GameObject car = SpawnCar(spawn);
+            Quaternion spawnRotation = city.SpawnRotation;
+            GameObject car = SpawnCar(spawn, spawnRotation);
+            ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
+            controller.enabled = false;
 
             Camera cameraComponent = Camera.main;
             if (cameraComponent == null)
@@ -34,47 +47,59 @@ namespace CityDrive
             }
             cameraComponent.fieldOfView = 65f;
             cameraComponent.farClipPlane = 1200f;
-            cameraComponent.transform.position = spawn + new Vector3(0f, 5f, -10f);
 
             ChaseCamera chase = cameraComponent.gameObject.GetComponent<ChaseCamera>();
             if (chase == null) chase = cameraComponent.gameObject.AddComponent<ChaseCamera>();
             chase.Target = car.transform;
-            chase.Car = car.GetComponent<ArcadeCarController>();
+            chase.Car = controller;
 
-            GameObject controlsHost = new GameObject("Controls");
-            MobileControls controls = controlsHost.AddComponent<MobileControls>();
-            controls.Car = chase.Car;
-            controls.Chase = chase;
+            loading.SetProgress(0.88f, "ASSETS READY", "Starting BMW 330i xDrive...");
+            yield return new WaitForSecondsRealtime(0.5f);
+            loading.SetProgress(1f, "READY TO DRIVE", "Welcome to City Drive");
+            yield return new WaitForSecondsRealtime(0.6f);
+            loading.Hide();
+
+            HomeScreen home = gameObject.AddComponent<HomeScreen>();
+            home.Show(city, car, controller, chase, cameraComponent, spawn, spawnRotation, () =>
+            {
+                GameObject controlsHost = new GameObject("Controls");
+                MobileControls controls = controlsHost.AddComponent<MobileControls>();
+                controls.Car = controller;
+                controls.Chase = chase;
+            });
         }
 
-        private static GameObject SpawnCar(Vector3 spawn)
+        private static GameObject SpawnCar(Vector3 spawn, Quaternion rotation)
         {
-            GameObject prefab = Resources.Load<GameObject>(CarResource);
-            GameObject car;
+            GameObject car = new GameObject("BMW 330i xDrive - Player");
+            car.transform.SetPositionAndRotation(spawn, rotation);
 
+            GameObject prefab = Resources.Load<GameObject>(CarResource);
             if (prefab != null)
             {
-                car = Instantiate(prefab, spawn, Quaternion.identity);
+                GameObject visual = Instantiate(prefab);
+                visual.name = "BMW 330i xDrive (GLB)";
+                visual.transform.SetParent(car.transform, false);
+                // glTFast mirrors the Sketchfab scene; +90 X restores its orientation.
+                visual.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                // 0.047 glTF units long -> ~4.2 metres; wheels lowered to the springs.
+                visual.transform.localScale = Vector3.one * ModelScale;
+                visual.transform.localPosition = new Vector3(0f, -0.648f, 0f);
+                RepairMaterials(visual);
             }
             else
             {
-                // Fallback so the game still runs if the model folder was removed.
-                Debug.LogWarning("[CityDrive] BMW prefab missing; using a placeholder body.");
-                car = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                car.transform.position = spawn;
-                car.transform.localScale = new Vector3(1.9f, 1.2f, 4.4f);
+                Debug.LogWarning("[CityDrive] BMW GLB missing; using a placeholder body.");
+                GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                body.transform.SetParent(car.transform, false);
+                body.transform.localScale = new Vector3(1.9f, 1.2f, 4.4f);
             }
 
-            car.name = "BMW M3 GTR - Player";
-            RepairMaterials(car);
+            BoxCollider collider = car.AddComponent<BoxCollider>();
+            collider.center = new Vector3(0f, 0f, 0f);
+            collider.size = new Vector3(1.9f, 1.4f, 4.3f);
 
-            BoxCollider collider = car.GetComponent<BoxCollider>();
-            if (collider == null) collider = car.AddComponent<BoxCollider>();
-            collider.center = new Vector3(0f, 0.62f, 0f);
-            collider.size = new Vector3(1.86f, 1.24f, 4.35f);
-
-            Rigidbody body = car.GetComponent<Rigidbody>();
-            if (body == null) body = car.AddComponent<Rigidbody>();
+            Rigidbody body = car.AddComponent<Rigidbody>();
             body.mass = 1250f;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
@@ -88,8 +113,8 @@ namespace CityDrive
         }
 
         /// <summary>
-        /// The original asset uses a few custom shaders that are not bundled. Anything
-        /// that failed to resolve is swapped for Unity's built-in Standard shader.
+        /// Keeps the glTFast PBR textures and swaps only shaders that cannot run on
+        /// this device for Unity's built-in Standard shader.
         /// </summary>
         private static void RepairMaterials(GameObject model)
         {

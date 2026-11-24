@@ -80,8 +80,8 @@ namespace CityDrive
 
             BoxCollider collider = GetComponent<BoxCollider>();
             if (collider == null) collider = gameObject.AddComponent<BoxCollider>();
-            collider.center = new Vector3(0f, 0.62f, 0f);
-            collider.size = new Vector3(1.86f, 1.24f, 4.35f);
+            collider.center = Vector3.zero;
+            collider.size = new Vector3(1.9f, 1.4f, 4.3f);
 
             _spawnPosition = transform.position;
             _spawnRotation = transform.rotation;
