@@ -12,37 +12,20 @@ Ye guide un teen secrets ke baare mein hai jo `.github/workflows/build-apk.yml` 
 
 ---
 
-## ⭐ Try this first — mobile-only automatic route (no PC)
+## ⭐ Best route — no PC, no licence file (GameCI v6)
 
-Maine aapke repo me `.github/workflows/get-unity-license.yml` bana diya hai. Ye GitHub ke cloud me:
+Unity ab Personal licence ke liye online account activation use karta hai; `.alf`/`.ulf` manual activation band ho chuka hai. GameCI ke naye version (`unity-builder@v6` + CLI) me **sirf email aur password** se Unity Personal activate hoti hai — koi licence file nahi chahiye [3](https://qiita.com/broken55/items/a7139f8be5bd9c003f31) [6](https://github.com/Andahmed/LegendsReborn/pull/48).
 
-1. Unity 2022.3 Docker image se `.alf` activation request banata hai (licence ki zarurat nahi),
-2. community tool `unity-license-activate` se aapke Unity email/password se `.ulf` licence mangata hai,
-3. `.ulf` ko ek **short-lived artifact** me upload karta hai (GitHub `GITHUB_TOKEN` secrets likhne ki izazat nahi deta, isliye secret ki jagah artifact),
-4. aur **Build Android APK** workflow khud start kar deta hai; build workflow wo artifact download karke licence istemal karta hai.
-
-### Aapko sirf ye karna hai
+### Aapko bas ye karna hai
 
 1. GitHub → ye repo → **Settings → Secrets and variables → Actions → New repository secret**.
-2. Sirf **do** secrets add karein:
-   - `UNITY_EMAIL` = aapka Unity login email
-   - `UNITY_PASSWORD` = aapka Unity password
-3. **Actions → Get Unity License (no PC) → Run workflow** → branch select karein → Run.
-4. Log me “Licence file ready” aur “APK build workflow triggered” aaye to bas; ab **Build Android APK** run ke andar APK aayega (Releases/Artifacts). Build log me “Using licence from the UnityLicense artifact” dikhega.
+2. Do secrets (pehle se daale hon to theek hai): `UNITY_EMAIL` aur `UNITY_PASSWORD`.
+   - ⚠️ GameCI CLI ko **special characters wale passwords** me problem ho sakti hai. Aapne password chat me bhi likha hai — abhi ek **naya, sirf letters+numbers wala password** bana kar Unity par set karein aur GitHub me `UNITY_PASSWORD` update karein. Isse security bhi theek aur build bhi.
+   - 2FA on ho to temporary off karein ya build fail hone par log bhejein.
+3. **Actions → Build Android APK → Run workflow** → branch `arena/411eaf4f-shshsh` → Run.
+4. Build khatam hone par **Releases** ya **Artifacts** se `CityDrive.apk` download karein.
 
-### Agar 2FA on hai
-
-- Authenticator app ka **original TOTP key** ho to extra secret `UNITY_TOTP_KEY` add karein.
-- Email code aata ho to extra secret `EMAIL_PASSWORD` add karein (gmail/outlook/yahoo etc. ke liye IMAP allow hona chahiye).
-- Ye tool community-made hai aur Unity ke login page badalne par fail ho sakta hai. Fail hone par log ka last error line mujhe bhej dein.
-
-### 🔐 Security note
-
-Aapne password chat me likha hai — build complete hone ke baad **Unity account ka password badal dena** aur GitHub me `UNITY_PASSWORD` secret bhi update kar dena. Password ko kabhi workflow ya code me na likhein.
-
-### Agar ye route fail ho
-
-Tab official fallback sirf Unity Hub wala hai (neeche Step 1–4) — kisi bhi computer par sirf 5–10 minute.
+Agar isme error aaye to run ka last error line mujhe bhej dein — main workflow tune kar dunga. Official fallback (Unity Hub se `.ulf`) neeche diya hai, lekin uske liye PC chahiye.
 
 ---
 
