@@ -24,7 +24,7 @@ namespace CityDrive
         private RectTransform _steerKnob;
         private Text _speedText;
 
-        private static readonly Color PadColor = new Color(0.06f, 0.10f, 0.16f, 0.66f);
+        private static readonly Color PadColor = new Color(0.06f, 0.10f, 0.16f, 0.14f);
         private static readonly Color ActiveColor = new Color(0.20f, 0.75f, 0.95f, 0.85f);
 
         private void Awake()
@@ -55,7 +55,6 @@ namespace CityDrive
             _steerPad = Panel(canvasObject.transform, "Steer Pad",
                 new Vector2(0.01f, 0.02f), new Vector2(0.34f, 0.44f), PadColor);
             Icon(_steerPad.transform, "UI/icon_steer", new Vector2(0.20f, 0.22f), new Vector2(0.80f, 0.90f));
-            Label(_steerPad.transform, "STEER", font, 26);
 
             GameObject knob = new GameObject("Steer Knob", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             knob.transform.SetParent(_steerPad.transform, false);
@@ -69,27 +68,22 @@ namespace CityDrive
             _gasPad = Panel(canvasObject.transform, "Gas Pad",
                 new Vector2(0.68f, 0.25f), new Vector2(0.99f, 0.45f), PadColor);
             Icon(_gasPad.transform, "UI/icon_gas", new Vector2(0.18f, 0.30f), new Vector2(0.60f, 0.94f));
-            Label(_gasPad.transform, "GAS", font, 30);
 
             _brakePad = Panel(canvasObject.transform, "Brake Pad",
                 new Vector2(0.68f, 0.04f), new Vector2(0.99f, 0.24f), PadColor);
             Icon(_brakePad.transform, "UI/icon_brake", new Vector2(0.18f, 0.30f), new Vector2(0.60f, 0.94f));
-            Label(_brakePad.transform, "BRAKE", font, 30);
 
             _driftPad = Panel(canvasObject.transform, "Handbrake Pad",
                 new Vector2(0.37f, 0.02f), new Vector2(0.62f, 0.17f), PadColor);
             Icon(_driftPad.transform, "UI/icon_drift", new Vector2(0.30f, 0.18f), new Vector2(0.70f, 0.90f));
-            Label(_driftPad.transform, "DRIFT", font, 24);
 
             Image cameraPad = Panel(canvasObject.transform, "Camera Button",
                 new Vector2(0.84f, 0.85f), new Vector2(0.99f, 0.98f), PadColor);
             Icon(cameraPad.transform, "UI/icon_camera", new Vector2(0.16f, 0.20f), new Vector2(0.84f, 0.86f));
-            Label(cameraPad.transform, "CAM", font, 22);
 
             Image resetPad = Panel(canvasObject.transform, "Reset Button",
                 new Vector2(0.01f, 0.85f), new Vector2(0.16f, 0.98f), PadColor);
             Icon(resetPad.transform, "UI/icon_reset", new Vector2(0.16f, 0.20f), new Vector2(0.84f, 0.86f));
-            Label(resetPad.transform, "RESET", font, 22);
 
             UiTools.MakeImage(canvasObject.transform, "Speedometer", new Vector2(0.39f, 0.82f),
                 new Vector2(0.61f, 0.98f), Color.white, UiTools.GetSprite("UI/speed_gauge"));

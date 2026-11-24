@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CityDrive
@@ -31,10 +32,7 @@ namespace CityDrive
 
             _city = Instantiate(prefab, Vector3.zero, Quaternion.identity);
             _city.name = "City (GLB)";
-            // Sketchfab's root node converts Z-up to glTF Y-up. glTFast mirrors the
-            // scene into Unity's left-handed space, which leaves the town lying on
-            // its side. Rotating +90 degrees on X puts the buildings upright again.
-            _city.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            OrientCity();
             yield return null; // let the imported hierarchy settle for one frame
 
             RecalculateBounds();
@@ -49,7 +47,71 @@ namespace CityDrive
             IsReady = true;
         }
 
-        private void RecalculateBounds()
+        /// <summary>
+        /// Picks the rotation in which roads are flat (thin on Y) and buildings are
+        /// tall (large on Y), instead of assuming a fixed Sketchfab axis conversion.
+        /// </summary>
+        private void OrientCity()
+        {
+            List<Renderer> roads = new List<Renderer>();
+            List<Renderer> buildings = new List<Renderer>();
+            foreach (Renderer renderer in _city.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                string name = renderer.gameObject.name.ToLowerInvariant();
+                if (roads.Count < 16 &&
+                    (name.Contains("road") || name.Contains("street") || name.Contains("asphalt") ||
+                     name.Contains("pavement")))
+                    roads.Add(renderer);
+                if (buildings.Count < 16 &&
+                    (name.Contains("building") || name.Contains("house") || name.Contains("tower")))
+                    buildings.Add(renderer);
+            }
+
+            Quaternion[] candidates =
+            {
+                Quaternion.identity,
+                Quaternion.Euler(90f, 0f, 0f),
+                Quaternion.Euler(-90f, 0f, 0f),
+                Quaternion.Euler(180f, 0f, 0f),
+                Quaternion.Euler(0f, 0f, 180f),
+                Quaternion.Euler(0f, 180f, 0f)
+            };
+
+            float bestScore = float.MaxValue;
+            Quaternion best = Quaternion.identity;
+            foreach (Quaternion candidate in candidates)
+            {
+                _city.transform.rotation = candidate;
+                Physics.SyncTransforms();
+                float roadThickness = AverageHeight(roads);
+                float buildingHeight = AverageHeight(buildings);
+                Bounds bounds = ComputeBounds();
+                float score = roadThickness * 14f +
+                              (buildingHeight > 1f ? 40f / buildingHeight : 100f) +
+                              Mathf.Abs(bounds.size.y - 100f) * 0.02f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            _city.transform.rotation = best;
+            Physics.SyncTransforms();
+            Debug.Log("[CityDrive] City oriented with rotation " + best.eulerAngles +
+                      " (score " + bestScore.ToString("F1") + ")");
+        }
+
+        private static float AverageHeight(List<Renderer> renderers)
+        {
+            if (renderers.Count == 0) return 999f;
+            float total = 0f;
+            foreach (Renderer renderer in renderers) total += renderer.bounds.size.y;
+            return total / renderers.Count;
+        }
+
+        private Bounds ComputeBounds()
         {
             Renderer[] renderers = _city.GetComponentsInChildren<Renderer>(true);
             bool first = true;
@@ -62,14 +124,15 @@ namespace CityDrive
                     result = renderer.bounds;
                     first = false;
                 }
-                else
-                {
-                    result.Encapsulate(renderer.bounds);
-                }
+                else result.Encapsulate(renderer.bounds);
             }
-
             if (first) result = new Bounds(Vector3.zero, new Vector3(200f, 10f, 200f));
-            Bounds = result;
+            return result;
+        }
+
+        private void RecalculateBounds()
+        {
+            Bounds = ComputeBounds();
         }
 
         private static bool LooksLikeRoad(string name)

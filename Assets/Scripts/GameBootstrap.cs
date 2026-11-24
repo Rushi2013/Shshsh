@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CityDrive
@@ -29,6 +30,7 @@ namespace CityDrive
             loading.SetProgress(0.20f, "DOWNLOADING ASSETS", "Loading 3D city and textures...");
             yield return StartCoroutine(city.Build());
             loading.SetProgress(0.72f, "BUILDING CITY", "Placing roads and buildings...");
+            CreateGroundFallback(cityHost.transform, city.Bounds);
 
             Vector3 spawn = city.FindSpawnPoint();
             Quaternion spawnRotation = city.SpawnRotation;
@@ -63,6 +65,25 @@ namespace CityDrive
                 controls.Car = controller;
                 controls.Chase = chase;
             });
+        }
+
+        /// <summary>Flat safety surface just below the city so the tyres always have a road.</summary>
+        private static void CreateGroundFallback(Transform parent, Bounds cityBounds)
+        {
+            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            ground.name = "Ground (fallback under city roads)";
+            ground.transform.SetParent(parent, false);
+            ground.transform.position = new Vector3(0f, cityBounds.min.y - 0.12f, 0f);
+            ground.transform.localScale = new Vector3(
+                Mathf.Max(20f, cityBounds.size.x / 10f), 1f,
+                Mathf.Max(20f, cityBounds.size.z / 10f));
+            Shader shader = Shader.Find("Standard");
+            Material material = shader != null ? new Material(shader) : null;
+            if (material != null)
+            {
+                material.color = new Color(0.24f, 0.25f, 0.27f);
+                ground.GetComponent<Renderer>().material = material;
+            }
         }
 
         private static GameObject SpawnCar(Vector3 spawn, Quaternion rotation)
@@ -106,20 +127,43 @@ namespace CityDrive
         }
 
         /// <summary>
-        /// Picks the X rotation that makes the imported GLB a normal upright car, then
-        /// centres it on the physics body and puts its wheels near the spring raycasts.
+        /// Chooses the visual rotation from the actual wheel positions: wheels must
+        /// sit BELOW the body and the front wheels must point along +Z of the car.
+        /// This avoids the upside-down model regardless of how glTFast imported it.
         /// </summary>
         private static void FitCarVisual(GameObject car, GameObject visual)
         {
-            float[] angles = { 90f, 0f, -90f, 180f };
+            List<Transform> frontWheels = new List<Transform>();
+            List<Transform> rearWheels = new List<Transform>();
+            foreach (Transform t in visual.GetComponentsInChildren<Transform>(true))
+            {
+                string name = t.name;
+                if (name == "polySurface3" || name == "polySurface4" ||
+                    name == "WheelFL" || name == "WheelFR") frontWheels.Add(t);
+                if (name == "polySurface1" || name == "polySurface2" ||
+                    name == "WheelRL" || name == "WheelRR") rearWheels.Add(t);
+            }
+
+            Quaternion[] candidates =
+            {
+                Quaternion.identity,
+                Quaternion.Euler(0f, 0f, 180f),
+                Quaternion.Euler(0f, 180f, 180f),
+                Quaternion.Euler(0f, 180f, 0f),
+                Quaternion.Euler(180f, 0f, 0f),
+                Quaternion.Euler(90f, 0f, 0f),
+                Quaternion.Euler(-90f, 0f, 0f)
+            };
+
             float bestScore = float.MaxValue;
-            float bestAngle = 90f;
+            Quaternion bestRotation = Quaternion.identity;
             Bounds bestBounds = new Bounds();
 
             visual.transform.localPosition = Vector3.zero;
-            foreach (float angle in angles)
+            foreach (Quaternion candidate in candidates)
             {
-                visual.transform.localRotation = Quaternion.Euler(angle, 0f, 0f);
+                visual.transform.localRotation = candidate;
+                Physics.SyncTransforms();
                 Bounds bounds = BoundsOf(visual);
                 Vector3 size = bounds.size;
                 float height = size.y;
@@ -128,22 +172,51 @@ namespace CityDrive
                 float score = Mathf.Abs(height - 1.35f) * 3f +
                               Mathf.Abs(length - 4.23f) +
                               Mathf.Abs(width - 1.89f) * 2f;
+
+                if (frontWheels.Count > 0 && rearWheels.Count > 0)
+                {
+                    float wheelY = (AverageY(frontWheels) + AverageY(rearWheels)) * 0.5f - car.transform.position.y;
+                    float bodyY = bounds.center.y - car.transform.position.y;
+                    float frontZ = AverageZ(frontWheels) - car.transform.position.z;
+                    float rearZ = AverageZ(rearWheels) - car.transform.position.z;
+
+                    // Wheels must be below the body; front axle must be at +Z.
+                    if (wheelY > bodyY - 0.15f) score += 60f;
+                    if (frontZ <= rearZ) score += 25f;
+                }
+
                 if (score < bestScore)
                 {
                     bestScore = score;
-                    bestAngle = angle;
+                    bestRotation = candidate;
                     bestBounds = bounds;
                 }
             }
 
-            visual.transform.localRotation = Quaternion.Euler(bestAngle, 0f, 0f);
+            visual.transform.localRotation = bestRotation;
+            Physics.SyncTransforms();
+            bestBounds = BoundsOf(visual);
             Vector3 center = bestBounds.center - car.transform.position;
             visual.transform.localPosition = new Vector3(
                 -center.x,
                 -0.65f - bestBounds.min.y + car.transform.position.y,
                 -center.z);
-            Debug.Log("[CityDrive] BMW visual fitted at X=" + bestAngle +
-                      " size=" + bestBounds.size);
+            Debug.Log("[CityDrive] BMW visual fitted, score=" + bestScore +
+                      " size=" + bestBounds.size + " rotation=" + bestRotation.eulerAngles);
+        }
+
+        private static float AverageY(List<Transform> transforms)
+        {
+            float total = 0f;
+            foreach (Transform t in transforms) total += t.position.y;
+            return total / Mathf.Max(1, transforms.Count);
+        }
+
+        private static float AverageZ(List<Transform> transforms)
+        {
+            float total = 0f;
+            foreach (Transform t in transforms) total += t.position.z;
+            return total / Mathf.Max(1, transforms.Count);
         }
 
         private static Bounds BoundsOf(GameObject root)

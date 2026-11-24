@@ -53,10 +53,10 @@ namespace CityDrive
             _controller.enabled = false;
             _chase.enabled = false;
 
-            _car.transform.position = new Vector3(0f, 1.0f, 0f);
+            _car.transform.position = new Vector3(0f, 0.72f, 0f);
             _car.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
-            _camera.transform.position = new Vector3(0f, 2.6f, -7.5f);
-            _camera.transform.LookAt(new Vector3(0f, 1.2f, 0f));
+            _camera.transform.position = new Vector3(0f, 2.1f, -7.2f);
+            _camera.transform.LookAt(new Vector3(0f, 0.85f, 0f));
             _camera.fieldOfView = 54f;
             _camera.farClipPlane = 200f;
 
