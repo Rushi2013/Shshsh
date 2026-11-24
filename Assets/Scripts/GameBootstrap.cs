@@ -90,9 +90,9 @@ namespace CityDrive
             else
             {
                 Debug.LogWarning("[CityDrive] BMW GLB missing; using a placeholder body.");
-                GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                body.transform.SetParent(car.transform, false);
-                body.transform.localScale = new Vector3(1.9f, 1.2f, 4.4f);
+                GameObject placeholder = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                placeholder.transform.SetParent(car.transform, false);
+                placeholder.transform.localScale = new Vector3(1.9f, 1.2f, 4.4f);
             }
 
             BoxCollider collider = car.AddComponent<BoxCollider>();

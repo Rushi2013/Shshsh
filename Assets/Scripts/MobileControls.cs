@@ -234,7 +234,7 @@ namespace CityDrive
             {
                 int kph = Mathf.RoundToInt(Car.SpeedKph);
                 float forward = Vector3.Dot(Car.GetComponent<Rigidbody>().velocity, Car.transform.forward);
-                string gear = BrakeInput > 0f && forward < 1f ? "R" : "D";
+                string gear = Brake > 0f && forward < 1f ? "R" : "D";
                 _speedText.text = kph + " km/h  " + gear;
             }
         }
