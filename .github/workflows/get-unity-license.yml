@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  secrets: write
   actions: write
 
 jobs:
@@ -63,18 +62,24 @@ jobs:
           if [ -n "$MAIL_PASS" ]; then extra="$extra --email-password $MAIL_PASS"; fi
           unity-license-activate "$UNITY_USER" "$UNITY_PASS" "$ALF_PATH" $extra
 
-      - name: Store .ulf as the UNITY_LICENSE secret
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Share .ulf with the build workflow
         run: |
-          ULF=$(find "$GITHUB_WORKSPACE" -name '*.ulf' -print -quit)
+          ULF=$(find "$GITHUB_WORKSPACE" -maxdepth 2 -name '*.ulf' -print -quit)
           if [ -z "$ULF" ]; then echo "No .ulf file was produced by activation"; exit 1; fi
-          gh secret set UNITY_LICENSE < "$ULF"
-          echo "UNITY_LICENSE secret created from $(basename "$ULF")"
+          mkdir -p license-out
+          cp "$ULF" license-out/UnityLicense.ulf
+          echo "Licence file ready: $(basename "$ULF")"
+
+      - name: Upload licence artifact (short retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: UnityLicense
+          path: license-out/UnityLicense.ulf
+          retention-days: 1
 
       - name: Start the APK build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run "Build Android APK" --ref "$GITHUB_REF_NAME"
+          gh workflow run build-apk.yml --ref "$GITHUB_REF_NAME"
           echo "APK build workflow triggered"

@@ -18,8 +18,8 @@ Maine aapke repo me `.github/workflows/get-unity-license.yml` bana diya hai. Ye 
 
 1. Unity 2022.3 Docker image se `.alf` activation request banata hai (licence ki zarurat nahi),
 2. community tool `unity-license-activate` se aapke Unity email/password se `.ulf` licence mangata hai,
-3. `.ulf` ko apne aap `UNITY_LICENSE` secret me save karta hai,
-4. aur **Build Android APK** workflow khud start kar deta hai.
+3. `.ulf` ko ek **short-lived artifact** me upload karta hai (GitHub `GITHUB_TOKEN` secrets likhne ki izazat nahi deta, isliye secret ki jagah artifact),
+4. aur **Build Android APK** workflow khud start kar deta hai; build workflow wo artifact download karke licence istemal karta hai.
 
 ### Aapko sirf ye karna hai
 
@@ -28,7 +28,7 @@ Maine aapke repo me `.github/workflows/get-unity-license.yml` bana diya hai. Ye 
    - `UNITY_EMAIL` = aapka Unity login email
    - `UNITY_PASSWORD` = aapka Unity password
 3. **Actions → Get Unity License (no PC) → Run workflow** → branch select karein → Run.
-4. Log me “UNITY_LICENSE secret created” aur “APK build workflow triggered” aaye to bas; ab **Build Android APK** run ke interest me APK aayega (Releases/Artifacts).
+4. Log me “Licence file ready” aur “APK build workflow triggered” aaye to bas; ab **Build Android APK** run ke andar APK aayega (Releases/Artifacts). Build log me “Using licence from the UnityLicense artifact” dikhega.
 
 ### Agar 2FA on hai
 

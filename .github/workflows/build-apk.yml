@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-apk:
@@ -17,10 +18,34 @@ jobs:
         with:
           lfs: false
 
+      - name: Download licence produced by the no-PC workflow
+        uses: dawidd6/action-download-artifact@v28
+        continue-on-error: true
+        with:
+          workflow: get-unity-license.yml
+          workflow_conclusion: success
+          name: UnityLicense
+          path: license-in
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export licence to the build environment
+        run: |
+          ULF=$(find license-in -name '*.ulf' -print -quit 2>/dev/null || true)
+          if [ -n "$ULF" ]; then
+            {
+              echo 'UNITY_LICENSE<<EOF'
+              cat "$ULF"
+              echo 'EOF'
+            } >> "$GITHUB_ENV"
+            echo "Using licence from the UnityLicense artifact"
+          else
+            echo "No licence artifact found; falling back to the UNITY_LICENSE secret"
+          fi
+
       - name: Build APK with Unity
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_LICENSE: ${{ env.UNITY_LICENSE || secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
