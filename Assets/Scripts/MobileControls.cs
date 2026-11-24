@@ -4,8 +4,9 @@ using UnityEngine.UI;
 namespace CityDrive
 {
     /// <summary>
-    /// Touch controls that work on any phone resolution, plus keyboard/mouse fallback.
-    /// The visual pads are created in code, so no scene authoring or prefabs are needed.
+    /// Touch HUD with a real circular steering wheel: drag your finger around the
+    /// wheel and the front wheels follow that angle. Gas/brake/drift icons grow while
+    /// held; releasing a button immediately removes its input.
     /// </summary>
     public sealed class MobileControls : MonoBehaviour
     {
@@ -17,15 +18,32 @@ namespace CityDrive
         public float Brake { get; private set; }
         public float Handbrake { get; private set; }
 
-        private Image _steerPad;
-        private Image _gasPad;
-        private Image _brakePad;
-        private Image _driftPad;
-        private RectTransform _steerKnob;
+        private RectTransform _wheel;
+        private RectTransform _gasIcon;
+        private RectTransform _brakeIcon;
+        private RectTransform _driftIcon;
         private Text _speedText;
 
-        private static readonly Color PadColor = new Color(0.06f, 0.10f, 0.16f, 0.14f);
-        private static readonly Color ActiveColor = new Color(0.20f, 0.75f, 0.95f, 0.85f);
+        private int _steerTouchId = -1;
+        private float _lastSteerAngle;
+        private float _steerTarget;
+
+        private bool _gasPressed;
+        private bool _brakePressed;
+        private bool _driftPressed;
+        private bool _cameraPressed;
+        private bool _resetPressed;
+
+        private const float WheelX = 0.17f;
+        private const float WheelY = 0.24f;
+        private const float GasMinX = 0.70f;
+        private const float GasMinY = 0.27f;
+        private const float GasMaxY = 0.48f;
+        private const float BrakeMinY = 0.06f;
+        private const float BrakeMaxY = 0.26f;
+        private const float DriftMinX = 0.38f;
+        private const float DriftMaxX = 0.62f;
+        private const float DriftMaxY = 0.18f;
 
         private void Awake()
         {
@@ -35,10 +53,10 @@ namespace CityDrive
         private void BuildHud()
         {
             Font font = null;
-            try { font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { /* older Unity */ }
+            try { font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { }
             if (font == null)
             {
-                try { font = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { /* no font available */ }
+                try { font = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { }
             }
 
             GameObject canvasObject = new GameObject("Touch HUD", typeof(Canvas), typeof(CanvasScaler));
@@ -52,160 +70,159 @@ namespace CityDrive
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            _steerPad = Panel(canvasObject.transform, "Steer Pad",
-                new Vector2(0.01f, 0.02f), new Vector2(0.34f, 0.44f), PadColor);
-            Icon(_steerPad.transform, "UI/icon_steer", new Vector2(0.20f, 0.22f), new Vector2(0.80f, 0.90f));
+            // Circular steering wheel — the sprite itself rotates with the finger.
+            Image wheelImage = UiTools.MakeImage(canvasObject.transform, "Steering Wheel",
+                new Vector2(WheelX - 0.14f, WheelY - 0.16f),
+                new Vector2(WheelX + 0.14f, WheelY + 0.16f),
+                Color.white, UiTools.GetSprite("UI/icon_steer"));
+            _wheel = wheelImage.rectTransform;
 
-            GameObject knob = new GameObject("Steer Knob", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            knob.transform.SetParent(_steerPad.transform, false);
-            RectTransform knobRect = knob.GetComponent<RectTransform>();
-            knobRect.anchorMin = knobRect.anchorMax = new Vector2(0.5f, 0.5f);
-            knobRect.sizeDelta = new Vector2(110f, 110f);
-            knob.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.35f);
-            knob.GetComponent<Image>().raycastTarget = false;
-            _steerKnob = knobRect;
+            Image gas = UiTools.MakeImage(canvasObject.transform, "Gas Icon",
+                new Vector2(0.70f, 0.30f), new Vector2(0.98f, 0.47f),
+                Color.white, UiTools.GetSprite("UI/icon_gas"));
+            _gasIcon = gas.rectTransform;
 
-            _gasPad = Panel(canvasObject.transform, "Gas Pad",
-                new Vector2(0.68f, 0.25f), new Vector2(0.99f, 0.45f), PadColor);
-            Icon(_gasPad.transform, "UI/icon_gas", new Vector2(0.18f, 0.30f), new Vector2(0.60f, 0.94f));
+            Image brake = UiTools.MakeImage(canvasObject.transform, "Brake Icon",
+                new Vector2(0.70f, 0.08f), new Vector2(0.98f, 0.25f),
+                Color.white, UiTools.GetSprite("UI/icon_brake"));
+            _brakeIcon = brake.rectTransform;
 
-            _brakePad = Panel(canvasObject.transform, "Brake Pad",
-                new Vector2(0.68f, 0.04f), new Vector2(0.99f, 0.24f), PadColor);
-            Icon(_brakePad.transform, "UI/icon_brake", new Vector2(0.18f, 0.30f), new Vector2(0.60f, 0.94f));
+            Image drift = UiTools.MakeImage(canvasObject.transform, "Drift Icon",
+                new Vector2(0.40f, 0.015f), new Vector2(0.60f, 0.15f),
+                Color.white, UiTools.GetSprite("UI/icon_drift"));
+            _driftIcon = drift.rectTransform;
 
-            _driftPad = Panel(canvasObject.transform, "Handbrake Pad",
-                new Vector2(0.37f, 0.02f), new Vector2(0.62f, 0.17f), PadColor);
-            Icon(_driftPad.transform, "UI/icon_drift", new Vector2(0.30f, 0.18f), new Vector2(0.70f, 0.90f));
+            UiTools.MakeImage(canvasObject.transform, "Camera Icon",
+                new Vector2(0.86f, 0.86f), new Vector2(0.98f, 0.97f),
+                Color.white, UiTools.GetSprite("UI/icon_camera"));
+            UiTools.MakeImage(canvasObject.transform, "Reset Icon",
+                new Vector2(0.02f, 0.86f), new Vector2(0.14f, 0.97f),
+                Color.white, UiTools.GetSprite("UI/icon_reset"));
 
-            Image cameraPad = Panel(canvasObject.transform, "Camera Button",
-                new Vector2(0.84f, 0.85f), new Vector2(0.99f, 0.98f), PadColor);
-            Icon(cameraPad.transform, "UI/icon_camera", new Vector2(0.16f, 0.20f), new Vector2(0.84f, 0.86f));
-
-            Image resetPad = Panel(canvasObject.transform, "Reset Button",
-                new Vector2(0.01f, 0.85f), new Vector2(0.16f, 0.98f), PadColor);
-            Icon(resetPad.transform, "UI/icon_reset", new Vector2(0.16f, 0.20f), new Vector2(0.84f, 0.86f));
-
-            UiTools.MakeImage(canvasObject.transform, "Speedometer", new Vector2(0.39f, 0.82f),
-                new Vector2(0.61f, 0.98f), Color.white, UiTools.GetSprite("UI/speed_gauge"));
-            _speedText = Label(canvasObject.transform, "Speed", font, 34,
-                new Vector2(0.41f, 0.84f), new Vector2(0.59f, 0.92f), TextAnchor.MiddleCenter);
-            _speedText.text = "0 km/h";
+            UiTools.MakeImage(canvasObject.transform, "Speedometer",
+                new Vector2(0.39f, 0.82f), new Vector2(0.61f, 0.98f),
+                Color.white, UiTools.GetSprite("UI/speed_gauge"));
+            _speedText = UiTools.MakeText(canvasObject.transform, "Speed", "0 km/h", 34,
+                new Vector2(0.41f, 0.84f), new Vector2(0.59f, 0.92f),
+                TextAnchor.MiddleCenter);
         }
 
-        private static Image Panel(Transform parent, string name, Vector2 min, Vector2 max, Color color)
+        private static float AngleOf(Vector2 point, Vector2 centre)
         {
-            GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            go.transform.SetParent(parent, false);
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = min;
-            rect.anchorMax = max;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            Image image = go.GetComponent<Image>();
-            image.color = color;
-            image.raycastTarget = false;
-            return image;
+            return Mathf.Atan2(point.y - centre.y, point.x - centre.x) * Mathf.Rad2Deg;
         }
 
-        private static Text Label(Transform parent, string text, Font font, int size)
+        private static bool InWheelZone(Vector2 normalized)
         {
-            return Label(parent, text, font, size, Vector2.zero, Vector2.one, TextAnchor.MiddleCenter);
+            float dx = (normalized.x - WheelX) * Screen.width;
+            float dy = (normalized.y - WheelY) * Screen.height;
+            float radius = Mathf.Min(Screen.width, Screen.height) * 0.18f;
+            return dx * dx + dy * dy <= radius * radius;
         }
 
-        private static Text Label(Transform parent, string text, Font font, int size,
-            Vector2 min, Vector2 max, TextAnchor alignment)
+        private void HandleSteerTouch(Touch touch, Vector2 normalized)
         {
-            GameObject go = new GameObject(text + " Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            go.transform.SetParent(parent, false);
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = min;
-            rect.anchorMax = max;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            Text label = go.GetComponent<Text>();
-            if (font != null) label.font = font;
-            label.text = text;
-            label.fontSize = size;
-            label.alignment = alignment;
-            label.color = new Color(1f, 1f, 1f, 0.92f);
-            label.raycastTarget = false;
-            return label;
-        }
-
-        private static Image Icon(Transform parent, string resource, Vector2 min, Vector2 max)
-        {
-            Image image = UiTools.MakeImage(parent, resource, min, max, Color.white, UiTools.GetSprite(resource));
-            return image;
-        }
-
-        private static string ZoneOf(Vector2 normalized, bool began)
-        {
-            float x = normalized.x;
-            float y = normalized.y;
-
-            if (began && x >= 0.84f && y >= 0.85f) return "camera";
-            if (began && x <= 0.16f && y >= 0.85f) return "reset";
-
-            if (y <= 0.45f && x <= 0.34f) return "steer";
-            if (y >= 0.25f && y <= 0.45f && x >= 0.68f) return "gas";
-            if (y >= 0.04f && y < 0.25f && x >= 0.68f) return "brake";
-            if (y <= 0.17f && x >= 0.37f && x <= 0.62f) return "drift";
-            return "none";
+            if (touch.fingerId != _steerTouchId) return;
+            float angle = AngleOf(touch.position,
+                new Vector2(WheelX * Screen.width, WheelY * Screen.height));
+            float delta = Mathf.DeltaAngle(_lastSteerAngle, angle);
+            _steerTarget = Mathf.Clamp(_steerTarget + delta / 85f, -1f, 1f);
+            _lastSteerAngle = angle;
         }
 
         private void Update()
         {
-            float steerWanted = 0f;
-            bool gas = false;
-            bool brake = false;
-            bool drift = false;
+            _gasPressed = false;
+            _brakePressed = false;
+            _driftPressed = false;
+            bool keyboardSteer = false;
+            float keyboardSteerValue = 0f;
 
-            int touches = Input.touchCount;
-            for (int i = 0; i < touches; i++)
+            for (int i = 0; i < Input.touchCount; i++)
             {
                 Touch touch = Input.GetTouch(i);
-                Vector2 normalized = new Vector2(touch.position.x / Screen.width,
+                Vector2 n = new Vector2(touch.position.x / Screen.width,
                     touch.position.y / Screen.height);
-                bool began = touch.phase == TouchPhase.Began;
-                string zone = ZoneOf(normalized, began);
 
-                if (began && zone == "camera" && Chase != null) Chase.CycleMode();
-                if (began && zone == "reset" && Car != null) Car.ResetCar();
+                if (InWheelZone(n))
+                {
+                    if (touch.phase == TouchPhase.Began)
+                    {
+                        _steerTouchId = touch.fingerId;
+                        _lastSteerAngle = AngleOf(touch.position,
+                            new Vector2(WheelX * Screen.width, WheelY * Screen.height));
+                    }
+                    HandleSteerTouch(touch, n);
+                    if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                        _steerTouchId = -1;
+                    continue;
+                }
 
-                if (zone == "steer") steerWanted = Mathf.Clamp((normalized.x - 0.17f) / 0.17f, -1f, 1f);
-                else if (zone == "gas") gas = true;
-                else if (zone == "brake") brake = true;
-                else if (zone == "drift") drift = true;
+                if (n.x >= GasMinX && n.y >= GasMinY && n.y <= GasMaxY) _gasPressed = true;
+                if (n.x >= GasMinX && n.y >= BrakeMinY && n.y <= BrakeMaxY) _brakePressed = true;
+                if (n.x >= DriftMinX && n.x <= DriftMaxX && n.y <= DriftMaxY) _driftPressed = true;
+                if (touch.phase == TouchPhase.Began && n.x >= 0.84f && n.y >= 0.85f && Chase != null)
+                    Chase.CycleMode();
+                if (touch.phase == TouchPhase.Began && n.x <= 0.16f && n.y >= 0.85f && Car != null)
+                    Car.ResetCar();
             }
 
-            // Mouse / keyboard fallback (handy in the Editor and on laptops).
-            if (touches == 0)
+            if (Input.touchCount == 0)
             {
                 if (Input.GetMouseButton(0))
                 {
-                    Vector2 normalized = new Vector2(Input.mousePosition.x / Screen.width,
+                    Vector2 n = new Vector2(Input.mousePosition.x / Screen.width,
                         Input.mousePosition.y / Screen.height);
-                    string zone = ZoneOf(normalized, Input.GetMouseButtonDown(0));
-                    if (zone == "steer") steerWanted = Mathf.Clamp((normalized.x - 0.17f) / 0.17f, -1f, 1f);
-                    else if (zone == "gas") gas = true;
-                    else if (zone == "brake") brake = true;
-                    else if (zone == "drift") drift = true;
+                    if (InWheelZone(n))
+                    {
+                        float angle = AngleOf(Input.mousePosition,
+                            new Vector2(WheelX * Screen.width, WheelY * Screen.height));
+                        if (Input.GetMouseButtonDown(0)) _lastSteerAngle = angle;
+                        _steerTarget = Mathf.Clamp(_steerTarget +
+                            Mathf.DeltaAngle(_lastSteerAngle, angle) / 85f, -1f, 1f);
+                        _lastSteerAngle = angle;
+                    }
+                    else
+                    {
+                        if (n.x >= GasMinX && n.y >= GasMinY && n.y <= GasMaxY) _gasPressed = true;
+                        if (n.x >= GasMinX && n.y >= BrakeMinY && n.y <= BrakeMaxY) _brakePressed = true;
+                        if (n.x >= DriftMinX && n.x <= DriftMaxX && n.y <= DriftMaxY) _driftPressed = true;
+                    }
+                    if (Input.GetMouseButtonDown(0))
+                    {
+                        if (n.x >= 0.84f && n.y >= 0.85f && Chase != null) Chase.CycleMode();
+                        if (n.x <= 0.16f && n.y >= 0.85f && Car != null) Car.ResetCar();
+                    }
                 }
 
+                if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+                {
+                    keyboardSteer = true;
+                    keyboardSteerValue = -1f;
+                }
+                if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+                {
+                    keyboardSteer = true;
+                    keyboardSteerValue = 1f;
+                }
+                if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) _gasPressed = true;
+                if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) _brakePressed = true;
+                if (Input.GetKey(KeyCode.Space)) _driftPressed = true;
                 if (Input.GetKeyDown(KeyCode.C) && Chase != null) Chase.CycleMode();
                 if (Input.GetKeyDown(KeyCode.R) && Car != null) Car.ResetCar();
-
-                if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) steerWanted = -1f;
-                if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) steerWanted = 1f;
-                if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) gas = true;
-                if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) brake = true;
-                if (Input.GetKey(KeyCode.Space)) drift = true;
             }
 
-            Steer = Mathf.MoveTowards(Steer, steerWanted, Time.unscaledDeltaTime * 5f);
-            Throttle = gas ? 1f : 0f;
-            Brake = brake ? 1f : 0f;
-            Handbrake = drift ? 1f : 0f;
+            if (keyboardSteer)
+                _steerTarget = Mathf.MoveTowards(_steerTarget, keyboardSteerValue, Time.unscaledDeltaTime * 3f);
+            else if (_steerTouchId < 0 && !Input.GetMouseButton(0))
+                _steerTarget = Mathf.MoveTowards(_steerTarget, 0f, Time.unscaledDeltaTime * 0.85f);
+
+            Steer = Mathf.MoveTowards(Steer, _steerTarget, Time.unscaledDeltaTime * 12f);
+
+            // Brake always wins if both pedals are held.
+            Throttle = _gasPressed && !_brakePressed ? 1f : 0f;
+            Brake = _brakePressed ? 1f : 0f;
+            Handbrake = _driftPressed ? 1f : 0f;
 
             if (Car != null)
             {
@@ -215,14 +232,16 @@ namespace CityDrive
                 Car.HandbrakeInput = Handbrake;
             }
 
-            if (_steerPad != null)
+            if (_wheel != null)
             {
-                _steerPad.color = Mathf.Abs(Steer) > 0.1f ? ActiveColor : PadColor;
-                _gasPad.color = gas ? ActiveColor : PadColor;
-                _brakePad.color = brake ? ActiveColor : PadColor;
-                _driftPad.color = drift ? ActiveColor : PadColor;
-                _steerKnob.anchoredPosition = new Vector2(Steer * 105f, 0f);
+                _wheel.localEulerAngles = new Vector3(0f, 0f, -Steer * 135f);
+                float wheelScale = _steerTouchId >= 0 ? 1.08f : 1f;
+                _wheel.localScale = Vector3.Lerp(_wheel.localScale,
+                    Vector3.one * wheelScale, Time.unscaledDeltaTime * 10f);
             }
+            ScaleIcon(_gasIcon, _gasPressed && !_brakePressed);
+            ScaleIcon(_brakeIcon, _brakePressed);
+            ScaleIcon(_driftIcon, _driftPressed);
 
             if (_speedText != null && Car != null)
             {
@@ -231,6 +250,14 @@ namespace CityDrive
                 string gear = Brake > 0f && forward < 1f ? "R" : "D";
                 _speedText.text = kph + " km/h  " + gear;
             }
+        }
+
+        private static void ScaleIcon(RectTransform icon, bool pressed)
+        {
+            if (icon == null) return;
+            float target = pressed ? 1.28f : 1f;
+            icon.localScale = Vector3.Lerp(icon.localScale,
+                Vector3.one * target, Time.unscaledDeltaTime * 16f);
         }
     }
 }

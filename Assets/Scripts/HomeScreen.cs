@@ -229,6 +229,7 @@ namespace CityDrive
                 body.angularVelocity = Vector3.zero;
             }
             _car.transform.SetPositionAndRotation(_spawn, _spawnRotation);
+            _controller.ConfigureSpawn(_spawn, _spawnRotation);
             _controller.enabled = true;
             _chase.enabled = true;
             _camera.fieldOfView = 65f;
