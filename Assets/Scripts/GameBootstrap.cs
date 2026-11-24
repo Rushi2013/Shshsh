@@ -23,14 +23,12 @@ namespace CityDrive
             LoadingScreen loading = gameObject.AddComponent<LoadingScreen>();
             loading.Show();
             loading.SetProgress(0.05f, "GAME LOADING", "Checking game assets...");
-            yield return new WaitForSecondsRealtime(0.4f);
 
             GameObject cityHost = new GameObject("City Loader");
             CityBuilder city = cityHost.AddComponent<CityBuilder>();
             loading.SetProgress(0.20f, "DOWNLOADING ASSETS", "Loading 3D city and textures...");
             yield return StartCoroutine(city.Build());
-            loading.SetProgress(0.62f, "BUILDING CITY", "Placing roads and buildings...");
-            yield return new WaitForSecondsRealtime(0.35f);
+            loading.SetProgress(0.72f, "BUILDING CITY", "Placing roads and buildings...");
 
             Vector3 spawn = city.FindSpawnPoint();
             Quaternion spawnRotation = city.SpawnRotation;
@@ -53,14 +51,12 @@ namespace CityDrive
             chase.Target = car.transform;
             chase.Car = controller;
 
-            loading.SetProgress(0.88f, "ASSETS READY", "Starting BMW 330i xDrive...");
-            yield return new WaitForSecondsRealtime(0.5f);
             loading.SetProgress(1f, "READY TO DRIVE", "Welcome to City Drive");
-            yield return new WaitForSecondsRealtime(0.6f);
+            yield return new WaitForSecondsRealtime(0.15f);
             loading.Hide();
 
             HomeScreen home = gameObject.AddComponent<HomeScreen>();
-            home.Show(city, car, controller, chase, cameraComponent, spawn, spawnRotation, () =>
+            home.Show(city, car, controller, chase, cameraComponent, spawn, spawnRotation, loading, () =>
             {
                 GameObject controlsHost = new GameObject("Controls");
                 MobileControls controls = controlsHost.AddComponent<MobileControls>();
@@ -80,12 +76,9 @@ namespace CityDrive
                 GameObject visual = Instantiate(prefab);
                 visual.name = "BMW 330i xDrive (GLB)";
                 visual.transform.SetParent(car.transform, false);
-                // glTFast mirrors the Sketchfab scene; +90 X restores its orientation.
-                visual.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                // 0.047 glTF units long -> ~4.2 metres; wheels lowered to the springs.
                 visual.transform.localScale = Vector3.one * ModelScale;
-                visual.transform.localPosition = new Vector3(0f, -0.648f, 0f);
                 RepairMaterials(visual);
+                FitCarVisual(car, visual);
             }
             else
             {
@@ -110,6 +103,64 @@ namespace CityDrive
             ArcadeCarController controller = car.AddComponent<ArcadeCarController>();
             controller.SetVisuals(visuals);
             return car;
+        }
+
+        /// <summary>
+        /// Picks the X rotation that makes the imported GLB a normal upright car, then
+        /// centres it on the physics body and puts its wheels near the spring raycasts.
+        /// </summary>
+        private static void FitCarVisual(GameObject car, GameObject visual)
+        {
+            float[] angles = { 90f, 0f, -90f, 180f };
+            float bestScore = float.MaxValue;
+            float bestAngle = 90f;
+            Bounds bestBounds = new Bounds();
+
+            visual.transform.localPosition = Vector3.zero;
+            foreach (float angle in angles)
+            {
+                visual.transform.localRotation = Quaternion.Euler(angle, 0f, 0f);
+                Bounds bounds = BoundsOf(visual);
+                Vector3 size = bounds.size;
+                float height = size.y;
+                float length = Mathf.Max(size.x, size.z);
+                float width = Mathf.Min(size.x, size.z);
+                float score = Mathf.Abs(height - 1.35f) * 3f +
+                              Mathf.Abs(length - 4.23f) +
+                              Mathf.Abs(width - 1.89f) * 2f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestAngle = angle;
+                    bestBounds = bounds;
+                }
+            }
+
+            visual.transform.localRotation = Quaternion.Euler(bestAngle, 0f, 0f);
+            Vector3 center = bestBounds.center - car.transform.position;
+            visual.transform.localPosition = new Vector3(
+                -center.x,
+                -0.65f - bestBounds.min.y + car.transform.position.y,
+                -center.z);
+            Debug.Log("[CityDrive] BMW visual fitted at X=" + bestAngle +
+                      " size=" + bestBounds.size);
+        }
+
+        private static Bounds BoundsOf(GameObject root)
+        {
+            bool first = true;
+            Bounds result = new Bounds();
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.bounds.size == Vector3.zero) continue;
+                if (first)
+                {
+                    result = renderer.bounds;
+                    first = false;
+                }
+                else result.Encapsulate(renderer.bounds);
+            }
+            return result;
         }
 
         /// <summary>

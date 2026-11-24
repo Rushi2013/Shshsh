@@ -15,7 +15,7 @@ namespace CityDrive
         private Text _status;
         private Text _detail;
 
-        public void Show()
+        public void Show(string backgroundResource = "UI/loading_bg")
         {
             if (_canvasObject != null) return;
 
@@ -31,7 +31,7 @@ namespace CityDrive
             scaler.matchWidthOrHeight = 0.5f;
 
             UiTools.MakeImage(_canvasObject.transform, "Backdrop", Vector2.zero, Vector2.one,
-                new Color(1f, 1f, 1f, 0.72f), UiTools.GetSprite("UI/loading_bg"));
+                new Color(1f, 1f, 1f, 0.72f), UiTools.GetSprite(backgroundResource));
             UiTools.MakeImage(_canvasObject.transform, "Dim", Vector2.zero, Vector2.one,
                 new Color(0.02f, 0.04f, 0.09f, 0.55f));
 
