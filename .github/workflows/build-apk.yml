@@ -4,6 +4,11 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      host_only:
+        description: "Only copy the latest APK into the repo for fast download"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -11,6 +16,7 @@ permissions:
 
 jobs:
   build-apk:
+    if: ${{ !inputs.host_only }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
@@ -46,3 +52,29 @@ jobs:
             Unity-built Android APK of the open-world BMW city driving game.
             Download `CityDrive.apk` on your phone, enable "Install unknown apps", and install.
           files: build/**/*.apk
+
+  host-apk:
+    if: ${{ inputs.host_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: arena/411eaf4f-shshsh
+
+      - name: Download latest release APK
+        run: |
+          mkdir -p apk
+          rm -f apk/CityDrive.apk
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern "CityDrive.apk" --dir apk
+          ls -lh apk/CityDrive.apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit APK to branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f apk/CityDrive.apk
+          git commit -m "Host CityDrive APK for fast raw download" || true
+          git push
