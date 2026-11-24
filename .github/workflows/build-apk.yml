@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Build APK with Unity
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 2022.3.62f3
+          targetPlatform: Android
+          buildMethod: ProjectSetup.BuildAndroid
+          allowDirtyBuild: true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CityDrive-APK
+          path: build/*.apk
+          if-no-files-found: error
+
+      - name: Publish APK on the Releases page
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: city-drive-${{ github.run_number }}
+          name: City Drive - Android APK
+          body: |
+            Unity-built Android APK of the open-world BMW city driving game.
+            Download `CityDrive.apk` on your phone, enable "Install unknown apps", and install.
+          files: build/*.apk
