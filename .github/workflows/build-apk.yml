@@ -44,6 +44,8 @@ jobs:
             echo '```'
             if [ -n "$LOG" ]; then
               grep -iE 'error CS|error:|exception|aborting|failed|could not|unable' "$LOG" | tail -n 60
+              echo '--- build method marker ---'
+              cat build_status.txt 2>/dev/null || echo 'BuildAndroid was never reached (script compilation likely failed).'
               echo '--- log tail ---'
               tail -n 80 "$LOG"
             else
