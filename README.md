@@ -75,7 +75,9 @@ CREDITS.md                                      # model/source attribution
 
 ## Latest APK
 
-Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-13/CityDrive.apk
+Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-15/CityDrive.apk
+
+Fast raw download (hosted in repo): https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
 
 Loading screen ke baad 3D home screen aata hai — BMW circular stand par ghoomta hai, PLAY dabate hi car city road par spawn hoti hai. City GLB ko +90° X se upright kiya gaya hai aur spawn nearest road mesh par hota hai.
 
