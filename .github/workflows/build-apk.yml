@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-apk:
@@ -28,6 +29,20 @@ jobs:
           targetPlatform: Android
           buildMethod: ProjectSetup.BuildAndroid
           allowDirtyBuild: true
+
+      - name: Show failure details in the job summary
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/logs" -o /tmp/run-logs.zip || true
+          echo '## Build error (last lines)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ -s /tmp/run-logs.zip ]; then
+            unzip -p /tmp/run-logs.zip 2>/dev/null | grep -iE 'error|exception|failed|cs\(|licen|warning' | tail -80 >> "$GITHUB_STEP_SUMMARY" || true
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
