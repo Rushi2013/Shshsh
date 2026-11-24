@@ -84,8 +84,7 @@ namespace CityDrive
             backdrop.transform.position = new Vector3(0f, 3f, 12f);
             backdrop.transform.localScale = new Vector3(30f, 16f, 1f);
             backdrop.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
-            SetMaterial(backdrop, Color.white, UiTools.Sprite("UI/showroom_bg") != null
-                ? Resources.Load<Texture2D>("UI/showroom_bg") : null);
+            SetMaterial(backdrop, Color.white, Resources.Load<Texture2D>("UI/showroom_bg"));
 
             GameObject lamp = new GameObject("Showroom Light", typeof(Light));
             lamp.transform.SetParent(_showroom.transform, false);
@@ -127,13 +126,13 @@ namespace CityDrive
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            UiTools.Text(_canvasObject.transform, "Home Title", "CITY DRIVE", 80,
+            UiTools.MakeText(_canvasObject.transform, "Home Title", "CITY DRIVE", 80,
                 new Vector2(0.1f, 0.82f), new Vector2(0.9f, 0.94f), TextAnchor.MiddleCenter,
                 new Color(1f, 0.84f, 0.30f));
-            UiTools.Text(_canvasObject.transform, "Home Car", "BMW 330i xDrive", 36,
+            UiTools.MakeText(_canvasObject.transform, "Home Car", "BMW 330i xDrive", 36,
                 new Vector2(0.1f, 0.75f), new Vector2(0.9f, 0.82f), TextAnchor.MiddleCenter,
                 new Color(0.70f, 0.90f, 1f));
-            UiTools.Text(_canvasObject.transform, "Home Hint", "DRIVE ANYWHERE  •  OPEN WORLD  •  DRIFT", 26,
+            UiTools.MakeText(_canvasObject.transform, "Home Hint", "DRIVE ANYWHERE  •  OPEN WORLD  •  DRIFT", 26,
                 new Vector2(0.1f, 0.16f), new Vector2(0.9f, 0.22f), TextAnchor.MiddleCenter,
                 new Color(0.84f, 0.88f, 0.94f));
 
@@ -146,13 +145,13 @@ namespace CityDrive
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             Image buttonImage = buttonObject.GetComponent<Image>();
-            buttonImage.sprite = UiTools.Sprite("UI/icon_play");
+            buttonImage.sprite = UiTools.GetSprite("UI/icon_play");
             buttonImage.color = new Color(1f, 0.92f, 0.66f, 1f);
             Button button = buttonObject.GetComponent<Button>();
             button.targetGraphic = buttonImage;
             button.onClick.AddListener(Play);
 
-            UiTools.Text(buttonObject.transform, "Play Label", "PLAY", 32,
+            UiTools.MakeText(buttonObject.transform, "Play Label", "PLAY", 32,
                 new Vector2(0f, -0.35f), new Vector2(1f, 0.12f), TextAnchor.MiddleCenter,
                 new Color(0.06f, 0.09f, 0.13f));
         }

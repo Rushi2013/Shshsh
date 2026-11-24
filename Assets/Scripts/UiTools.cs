@@ -10,7 +10,7 @@ namespace CityDrive
         private static readonly Dictionary<string, Sprite> Sprites = new Dictionary<string, Sprite>();
         private static Font _font;
 
-        public static Sprite Sprite(string resource)
+        public static Sprite GetSprite(string resource)
         {
             Sprite cached;
             if (Sprites.TryGetValue(resource, out cached) && cached != null) return cached;
@@ -35,7 +35,7 @@ namespace CityDrive
             return _font;
         }
 
-        public static Image Image(Transform parent, string name, Vector2 min, Vector2 max, Color color, Sprite sprite = null)
+        public static Image MakeImage(Transform parent, string name, Vector2 min, Vector2 max, Color color, Sprite sprite = null)
         {
             GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             go.transform.SetParent(parent, false);
@@ -51,7 +51,7 @@ namespace CityDrive
             return image;
         }
 
-        public static Text Text(Transform parent, string name, string content, int size, Vector2 min, Vector2 max,
+        public static Text MakeText(Transform parent, string name, string content, int size, Vector2 min, Vector2 max,
             TextAnchor alignment, Color? color = null)
         {
             GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));

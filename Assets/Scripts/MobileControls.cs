@@ -91,8 +91,8 @@ namespace CityDrive
             Icon(resetPad.transform, "UI/icon_reset", new Vector2(0.16f, 0.20f), new Vector2(0.84f, 0.86f));
             Label(resetPad.transform, "RESET", font, 22);
 
-            UiTools.Image(canvasObject.transform, "Speedometer", new Vector2(0.39f, 0.82f),
-                new Vector2(0.61f, 0.98f), Color.white, UiTools.Sprite("UI/speed_gauge"));
+            UiTools.MakeImage(canvasObject.transform, "Speedometer", new Vector2(0.39f, 0.82f),
+                new Vector2(0.61f, 0.98f), Color.white, UiTools.GetSprite("UI/speed_gauge"));
             _speedText = Label(canvasObject.transform, "Speed", font, 34,
                 new Vector2(0.41f, 0.84f), new Vector2(0.59f, 0.92f), TextAnchor.MiddleCenter);
             _speedText.text = "0 km/h";
@@ -140,7 +140,7 @@ namespace CityDrive
 
         private static Image Icon(Transform parent, string resource, Vector2 min, Vector2 max)
         {
-            Image image = UiTools.Image(parent, resource, min, max, Color.white, UiTools.Sprite(resource));
+            Image image = UiTools.MakeImage(parent, resource, min, max, Color.white, UiTools.GetSprite(resource));
             return image;
         }
 

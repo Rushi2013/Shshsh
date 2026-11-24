@@ -34,7 +34,8 @@ jobs:
         if: failure()
         run: |
           set +e
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/logs" > /tmp/action-logs.zip
+          curl -sSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/logs" -o /tmp/action-logs.zip
           rm -rf /tmp/action-logs && mkdir -p /tmp/action-logs
           unzip -o -q /tmp/action-logs.zip -d /tmp/action-logs
           LOG=$(find /tmp/action-logs -type f -name '*Build APK with Unity*.txt' | head -n 1)
