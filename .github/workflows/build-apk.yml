@@ -219,6 +219,30 @@ jobs:
           print(f'Staged {len(staged)} files, {total / 1048576:.2f} MiB into {dst}')
           PY
 
+      - name: Probe inner container
+        env:
+          TARGET_DIR: ${{ inputs.target_dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"
+          {
+            echo "Inner container probe"
+            echo "7z available: $(command -v 7z || echo no)"
+            for f in /tmp/assetdl/extracted/*; do
+              echo "===== $f ====="
+              file "$f" || true
+              echo "----- first 96 bytes -----"
+              xxd -l 96 "$f" || true
+              echo "----- 7z listing -----"
+              if command -v 7z >/dev/null 2>&1; then
+                7z l "$f" 2>&1 | head -150 || true
+              fi
+              echo "----- unzip listing -----"
+              unzip -l "$f" 2>&1 | head -150 || true
+            done
+          } > "$TARGET_DIR/INSPECT.txt"
+          head -120 "$TARGET_DIR/INSPECT.txt"
+
       - name: Commit staged assets
         run: |
           set -euo pipefail
