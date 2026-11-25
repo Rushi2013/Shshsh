@@ -90,3 +90,5 @@ Two attached briefs were read fully. Applied:
 ## Verification limits
 
 No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.
+
+ UniStorm integration build attempts `45578830427`, `45579609568`, `45580382152` and `45581244388` all failed before compilation with the same Unity licensing error: `ulf update failed / Token not found in cache / Connection reset by peer` in `Unity.Licensing.Client.log`. No C# compile error was reported. A workflow fallback to `UNITY_LICENSE`/`UNITY_SERIAL` secrets was added and retried without success. A new APK has therefore not been published for the UniStorm pass; the last released APK is still `city-drive-26`.
