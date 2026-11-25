@@ -68,6 +68,16 @@ The supplied `Realistic_Tire_Smoke_Drift_Burnout_Unity_Guide(1).pdf` was read in
 
 Backup tag before this pass: `pre-smoke-overhaul-backup`.
 
+
+## Final steering / speedometer / lighting pass (APK requested)
+
+Two attached briefs were read fully. Applied:
+
+- Steering inversion fixed at a single helper (`ApplyAngularDelta`) in `MobileControls.cs`: clockwise finger rotation now produces positive right-steer, matching `ArcadeCarController` and front Ackermann angles. UI wheel rotates around its centre with a 200° configurable range; hub jitter ignored; single active touch; frame-rate-independent self-centring.
+- Old `speed_gauge.png` removed from Resources and from the HUD. Replaced with a runtime-generated dark circular gauge + needle + digital km/h + gear, sourced only from `ArcadeCarController.SpeedKph` (Rigidbody velocity * 3.6). No external speedometer asset was available in the workspace, so the "In Game UI" pack could not be imported; an equivalent custom gauge was implemented instead.
+- Lighting guide applied: single warm-neutral sun, intensity 1.15, shadow strength 0.88, medium shadow resolution, 2 cascades, 85 m shadow distance, skybox ambient/reflections, subtle 220–700 m fog. City and car renderers now explicitly cast/receive real shadows; a small soft contact patch supplements (never replaces) the real shadow. Road/building/roughness variety tuned by material name; no HDRP/URP switch, no heavy post-processing in Built-in pipeline.
+- Backup tag before this pass: `pre-final-speed-lighting-backup`.
+
 ## Verification limits
 
 No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.

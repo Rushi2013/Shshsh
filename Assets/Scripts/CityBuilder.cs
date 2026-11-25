@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace CityDrive
 {
@@ -46,6 +47,7 @@ namespace CityDrive
 
             RecalculateBounds();
             AddColliders();
+            ConfigureVisuals();
             IsReady = true;
         }
 
@@ -147,6 +149,33 @@ namespace CityDrive
             string lower = name.ToLowerInvariant();
             return lower.Contains("building") || lower.Contains("house") || lower.Contains("tower") ||
                    lower.Contains("facade") || lower.Contains("wall");
+        }
+
+        /// <summary>Real shadows for city geometry and restrained PBR roughness variety.</summary>
+        private void ConfigureVisuals()
+        {
+            foreach (Renderer renderer in _city.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                bool sizeable = renderer.bounds.size.sqrMagnitude > 0.25f;
+                renderer.shadowCastingMode = sizeable ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                renderer.receiveShadows = sizeable;
+
+                Material[] materials = renderer.sharedMaterials;
+                foreach (Material material in materials)
+                {
+                    if (material == null || !material.HasProperty("_Glossiness")) continue;
+                    string name = material.name.ToLowerInvariant();
+                    if (name.Contains("glass") || name.Contains("window"))
+                        material.SetFloat("_Glossiness", 0.86f);
+                    else if (name.Contains("road") || name.Contains("asphalt") ||
+                             name.Contains("concrete") || name.Contains("pavement") ||
+                             name.Contains("brick") || name.Contains("terrain"))
+                        material.SetFloat("_Glossiness", 0.26f);
+                    else
+                        material.SetFloat("_Glossiness", 0.42f);
+                }
+            }
         }
 
         private void AddColliders()

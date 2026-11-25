@@ -40,6 +40,7 @@ public static class ProjectSetup
 
         QualitySettings.shadowDistance = 85f; // PDF mobile guidance: 60–90 units
         QualitySettings.shadowResolution = ShadowResolution.Medium;
+        QualitySettings.shadowCascades = 2;
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.vSyncCount = 0;
         QualitySettings.antiAliasing = 0;
@@ -202,6 +203,7 @@ public static class ProjectSetup
             sun.intensity = 1.15f;
             sun.shadows = LightShadows.Soft;
             sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.Medium;
+            sun.shadowStrength = 0.88f;
             sun.shadowBias = 0.02f;
             sun.shadowNormalBias = 0.02f;
 

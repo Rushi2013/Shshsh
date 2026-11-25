@@ -21,6 +21,7 @@ namespace CityDrive
             Application.targetFrameRate = 60;
             QualitySettings.vSyncCount = 0;
             QualitySettings.shadowDistance = 85f; // PDF guidance: 60–90 units on mobile
+            QualitySettings.shadowCascades = 2;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Physics.defaultContactOffset = 0.015f;
             Physics.bounceThreshold = 4f;
@@ -193,6 +194,7 @@ namespace CityDrive
             sun.intensity = 1.15f;
             sun.shadows = LightShadows.Soft;
             sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.Medium;
+            sun.shadowStrength = 0.88f;
             sun.shadowBias = 0.02f;
             sun.shadowNormalBias = 0.02f;
             RenderSettings.sun = sun;
@@ -260,6 +262,7 @@ namespace CityDrive
             VehicleAudio audio = car.AddComponent<VehicleAudio>();
             audio.Car = controller;
             VehicleLights.Create(car.transform, controller);
+            ContactShadow.Create(car.transform); // subtle supplement to the real sun shadow
             return car;
         }
 
@@ -275,6 +278,10 @@ namespace CityDrive
 
             foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
             {
+                // PDF: moving car must cast a real shadow and receive shadows.
+                renderer.shadowCastingMode = ShadowCastingMode.On;
+                renderer.receiveShadows = true;
+
                 Material[] materials = renderer.sharedMaterials;
                 bool changed = false;
                 for (int i = 0; i < materials.Length; i++)

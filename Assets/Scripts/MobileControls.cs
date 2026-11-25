@@ -15,10 +15,10 @@ namespace CityDrive
         public VehicleAudio Audio;
 
         [Header("Steering wheel")]
-        [SerializeField] private float maxWheelVisualDegrees = 135f;
-        [SerializeField] private float steerReturnSpeed = 2.4f;
-        [SerializeField] private float steerResponse = 12f;
-        [SerializeField] private float gestureSensitivity = 85f;
+        [SerializeField] private float maxWheelVisualDegrees = 200f;
+        [SerializeField] private float steerReturnSpeed = 2.2f;
+        [SerializeField] private float steerResponse = 14f;
+        [SerializeField] private float gestureSensitivity = 200f;
 
         [Header("Pedals")]
         [SerializeField] private float pedalResponse = 7f;
@@ -119,28 +119,90 @@ namespace CityDrive
 
         private void BuildSpeedometer(Transform parent)
         {
+            // Old speed_gauge.png is gone. A clean square gauge is generated at runtime:
+            // no stretched PNG, no white rectangle, no duplicate overlay.
             Image gauge = UiTools.MakeImage(parent, "Speedometer",
-                new Vector2(0.395f, 0.80f), new Vector2(0.605f, 0.985f),
-                Color.white, UiTools.GetSprite("UI/speed_gauge"));
+                new Vector2(0.5f, 0.895f), new Vector2(0.5f, 0.895f),
+                Color.white, CreateGaugeSprite());
+            gauge.rectTransform.sizeDelta = new Vector2(220f, 220f);
 
             Image needle = UiTools.MakeImage(gauge.rectTransform, "Speed Needle",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Color(1f, 0.24f, 0.18f, 0.95f));
+                new Color(1f, 0.30f, 0.20f, 0.96f));
             _needle = needle.rectTransform;
-            _needle.sizeDelta = new Vector2(9f, 128f);
+            _needle.sizeDelta = new Vector2(8f, 88f);
             _needle.pivot = new Vector2(0.5f, 0.08f);
-            _needle.anchoredPosition = new Vector2(0f, -22f);
+            _needle.anchoredPosition = new Vector2(0f, -18f);
             _needle.localEulerAngles = new Vector3(0f, 0f, needleMinAngle);
 
-            _speedText = UiTools.MakeText(gauge.rectTransform, "Digital Speed", "0", 52,
-                new Vector2(0.12f, 0.09f), new Vector2(0.88f, 0.45f),
+            _speedText = UiTools.MakeText(gauge.rectTransform, "Digital Speed", "0", 46,
+                new Vector2(0.14f, 0.10f), new Vector2(0.86f, 0.42f),
                 TextAnchor.MiddleCenter, new Color(0.96f, 0.99f, 1f));
-            UiTools.MakeText(gauge.rectTransform, "Speed Unit", "km/h", 22,
-                new Vector2(0.12f, 0.02f), new Vector2(0.88f, 0.15f),
+            UiTools.MakeText(gauge.rectTransform, "Speed Unit", "km/h", 20,
+                new Vector2(0.14f, 0.02f), new Vector2(0.86f, 0.15f),
                 TextAnchor.MiddleCenter, new Color(0.68f, 0.82f, 0.94f));
-            _gearText = UiTools.MakeText(gauge.rectTransform, "Gear", "D1", 22,
-                new Vector2(0.02f, 0.72f), new Vector2(0.25f, 0.90f),
+            _gearText = UiTools.MakeText(gauge.rectTransform, "Gear", "D1", 20,
+                new Vector2(0.01f, 0.72f), new Vector2(0.26f, 0.90f),
                 TextAnchor.MiddleCenter, new Color(1f, 0.84f, 0.32f));
+        }
+
+        /// <summary>Procedural dark gauge face with a subtle tick ring; replaces the old PNG.</summary>
+        private static Sprite CreateGaugeSprite()
+        {
+            const int size = 256;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Live Speedometer Face",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            Color[] pixels = new Color[size * size];
+            Color clear = new Color(0f, 0f, 0f, 0f);
+            Color face = new Color(0.035f, 0.055f, 0.085f, 0.86f);
+            Color ring = new Color(0.65f, 0.82f, 0.95f, 0.95f);
+            Color tick = new Color(1f, 0.86f, 0.36f, 0.95f);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x + 0.5f) / size * 2f - 1f;
+                    float dy = (y + 0.5f) / size * 2f - 1f;
+                    float r = Mathf.Sqrt(dx * dx + dy * dy);
+                    Color c = clear;
+
+                    if (r < 0.70f)
+                    {
+                        c = face;
+                    }
+                    else if (r < 0.80f)
+                    {
+                        c = Color.Lerp(face, ring, Mathf.SmoothStep(0.70f, 0.80f, r));
+                    }
+                    else if (r < 0.84f)
+                    {
+                        c = ring;
+                    }
+                    else if (r < 0.94f)
+                    {
+                        c = new Color(ring.r, ring.g, ring.b,
+                            ring.a * (1f - Mathf.SmoothStep(0.84f, 0.94f, r)) * 0.35f);
+                    }
+
+                    float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                    float sweep = Mathf.DeltaAngle(angle, 90f); // 0 at bottom, ±125 across the arc
+                    if (r > 0.57f && r < 0.68f && Mathf.Abs(sweep) <= 125f)
+                    {
+                        float nearest = Mathf.Round(sweep / 25f) * 25f;
+                        if (Mathf.Abs(sweep - nearest) < 2.2f) c = tick;
+                    }
+
+                    pixels[y * size + x] = c;
+                }
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, false);
+            return Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
         private Vector2 WheelCentreScreen()
@@ -149,12 +211,18 @@ namespace CityDrive
             return RectTransformUtility.WorldToScreenPoint(null, _wheel.position);
         }
 
+        private float WheelRadiusScreen()
+        {
+            if (_wheel == null) return 0f;
+            return _wheel.rect.width * 0.5f * Mathf.Max(0.01f, _wheel.lossyScale.x) * 1.15f;
+        }
+
         private bool InWheelZone(Vector2 screenPoint)
         {
             if (_wheel == null) return false;
             Vector2 centre = WheelCentreScreen();
             Vector2 delta = screenPoint - centre;
-            float radius = _wheel.rect.width * 0.5f * Mathf.Max(0.01f, _wheel.lossyScale.x) * 1.15f;
+            float radius = WheelRadiusScreen();
             return delta.x * delta.x + delta.y * delta.y <= radius * radius;
         }
 
@@ -162,6 +230,23 @@ namespace CityDrive
         {
             Vector2 delta = screenPoint - WheelCentreScreen();
             return Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+        }
+
+        private bool IsNearWheelHub(Vector2 screenPoint)
+        {
+            Vector2 delta = screenPoint - WheelCentreScreen();
+            float radius = WheelRadiusScreen();
+            return delta.sqrMagnitude < (radius * 0.18f) * (radius * 0.18f);
+        }
+
+        /// <summary>
+        /// The ONLY steering inversion in the project. Screen angle grows counter-clockwise,
+        /// so clockwise finger motion yields a negative delta; right turn must be positive.
+        /// </summary>
+        private void ApplyAngularDelta(float deltaDegrees)
+        {
+            _steerTarget = Mathf.Clamp(
+                _steerTarget - deltaDegrees / Mathf.Max(20f, gestureSensitivity), -1f, 1f);
         }
 
         private void Update()
@@ -189,9 +274,8 @@ namespace CityDrive
                     else if (touch.fingerId == _steerTouchId)
                     {
                         float angle = AngleAroundWheel(touch.position);
-                        _steerTarget = Mathf.Clamp(
-                            _steerTarget + Mathf.DeltaAngle(_lastSteerAngle, angle) / gestureSensitivity,
-                            -1f, 1f);
+                        if (!IsNearWheelHub(touch.position))
+                            ApplyAngularDelta(Mathf.DeltaAngle(_lastSteerAngle, angle));
                         _lastSteerAngle = angle;
                         if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
                             _steerTouchId = -1;
@@ -219,9 +303,8 @@ namespace CityDrive
                     {
                         float angle = AngleAroundWheel(mouse);
                         if (Input.GetMouseButtonDown(0)) _lastSteerAngle = angle;
-                        _steerTarget = Mathf.Clamp(
-                            _steerTarget + Mathf.DeltaAngle(_lastSteerAngle, angle) / gestureSensitivity,
-                            -1f, 1f);
+                        if (!IsNearWheelHub(mouse))
+                            ApplyAngularDelta(Mathf.DeltaAngle(_lastSteerAngle, angle));
                         _lastSteerAngle = angle;
                     }
                     else
