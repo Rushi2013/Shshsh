@@ -1,88 +1,76 @@
-# City Drive — Unity 3D Open-World Car Game
+# City Drive — Unity 3D Open-World Sedan Driving
 
-Ek **real Unity project** (HTML/JS nahi). Ismein aapki upload ki hui city GLB, BMW M3 GTR car model,
-raycast suspension physics, drifting, on-screen mobile controller aur poori city me collisions hai.
+Ek **real Unity 3D** project hai (HTML/JS nahi). Ismein aapki supplied city GLB aur BMW 330i-inspired sedan GLB, physics-driven car controller, circular touch steering, burnout/drift effects, layered car audio aur mobile HUD hai.
 
-> **Important (sach):** Is sandbox/container me Unity Editor, Android SDK aur Java nahi hai. Isliye yahan
-> se directly compile karke APK banana technically impossible hai — Unity ka apna engine/licence chahiye.
-> Maine poora game + **automatic APK build pipeline** bana diya hai. APK GitHub Actions (cloud me Unity)
-> ya Unity Cloud Build se banta hai; dono PC ke bina mobile browser se chalaye ja sakte hain. Neeche steps diye hain.
+## Latest APK — city-drive-24
 
-## Game kya karta hai
+**Fast raw download (repo-hosted):** https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
 
-- **City:** aapki `city.glb` (Sketchfab CC-BY city, 713 meshes) glTFast se load hoti hai, centre me place hoti hai,
-  har road/building par runtime MeshCollider/BoxCollider lagta hai — car kahin bhi ja sakti hai aur crash kar sakti hai.
-- **Car:** BMW M3 GTR E46 (29 FBX sub-meshes + asli materials/textures, original wheel nodes ke saath).
-- **Physics:** 4-wheel raycast suspension, spring/damper, rear-wheel drive, tyre slip + friction circle,
-  speed-sensitive steering, downforce, braking/reverse, handbrake drift, rollover auto-reset.
-- **Mobile controls:** fully touch-based steering pad, GAS, BRAKE, DRIFT, CAM, RESET. Keyboard fallback bhi hai
-  (WASD / arrows, Space drift, C camera, R reset).
-- **Camera:** 3 modes — chase, bonnet, top — speed ke saath FOV badalta hai, walls se clip nahi karta.
-- **HUD:** live speed in km/h.
+**Release download:** https://github.com/Rushi2013/Shshsh/releases/download/city-drive-24/CityDrive.apk
 
-## APK kaise banayein (PC ke bina, mobile browser se)
+**Verified CI build:** https://github.com/Rushi2013/Shshsh/actions/runs/45549821712 ✅
 
-### Option 1 — GitHub Actions (recommended)
+SHA-256: `ca98662a9248d112dfe63992ab19cb868e492d45202cfdbca7d77b75bff861f6`
 
-**Poori step-by-step guide:** [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md) — secrets kahan se laayein, kahan paste karein, build kaise chalayein, sab wahan hai.
+Phone par APK download karke install karein (unknown apps allow karna pad sakta hai).
 
-**PC ke bina (recommended):**
-1. GitHub → repo → **Settings → Secrets and variables → Actions** → 2 secrets: `UNITY_EMAIL`, `UNITY_PASSWORD` (no `.ulf` needed with GameCI v6).
-2. **Actions → Build Android APK → Run workflow**.
-3. Build ke baad **Releases** ya **Artifacts** se `CityDrive.apk` download karein.
+## Kya kya hai
 
-Details: [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md).
-
-### Option 2 — Unity Cloud Build
-
-Dashboard se repo connect karke Android target bana sakte hain, par cloud build automation Unity ke paid plans (Pro/Enterprise) ka feature hai; free Personal ke liye upar wala GitHub Actions tarika best hai.
-
-### Option 3 — PC par Unity (agar aapke paas Unity ho)
-
-Unity **2022.3.62f3** se project open karein. Project auto-setup ho jayega (`ProjectSetup.cs` scene aur settings banata hai).
-Play dabayein ya menu **CityDrive → Build Android APK**.
+- **Physics:** Rigidbody + 4 raycast wheels, spring/damper suspension, per-wheel angular velocity, slip-based tyre forces, friction circle, anti-roll bars, weight transfer, aero drag/downforce, automatic 5-speed gearbox with torque curve, configurable FWD/RWD/AWD.
+- **Steering:** circular wheel UI with angular finger gesture, configurable limit/sensitivity/self-centering, Ackermann front steering, speed-sensitive response; rear wheels steer nahi karte. Original interior wheel mile to usse sync kiya jata hai (is GLB me alag steering mesh nahi hai, isliye duplicate primitive nahi banaya gaya).
+- **Pedals:** alag accelerator aur brake, hold-to-drive, smooth press/release animation. Dono dabane par brake physics priority leti hai aur driven wheels ko burnout ke liye spin hone deti hai.
+- **Drift/burnout:** real lateral/longitudinal slip se; pooled skid marks aur contact-point smoke sirf tab jab tyres actually slide karein. Handbrake rear grip kam karta hai.
+- **Audio:** procedurally generated RPM-driven engine/load/turbo layers, wheelspin, squeal, wind, gear shift, horn, start/stop, impact aur loading ambience. Koi copyrighted BMW recording nahi.
+- **Speedometer:** actual player Rigidbody velocity se digital km/h + needle; input se fake nahi.
+- **Cameras:** 3 modes — close chase, far chase, driver-seat interior. Smooth blend, configurable offsets/FOV.
+- **Loading:** real `ResourceRequest`/setup-stage progress, smooth bar, tips aur loading audio. Timer se fake percentage nahi.
+- **Showroom:** fixed-centre, frame-rate-independent 360° car rotation aur studio lighting.
+- **Graphics:** procedural realistic skybox, sun/ambient/fog, soft shadows, reflection probe, PBR/glass/emissive material tuning, headlights aur brake-responsive taillights.
+- **City:** roads, pavements, ramps aur terrain par proper colliders; decorative meshes ko colliders nahi milte.
 
 ## Controls
 
 | Touch | Keyboard | Kaam |
 | --- | --- | --- |
-| Left pad (left/right slide) | A / D | Steering |
-| GAS | W | Accelerator |
-| BRAKE | S | Brake / reverse |
-| DRIFT | Space | Handbrake drift |
-| CAM | C | Camera change |
-| RESET | R | Car ko road par wapas |
+| Circular wheel (angle drag) | A / D ya arrow keys | Steering |
+| Gas (right) | W / up arrow | Accelerator |
+| Brake (right) | S / down arrow | Brake / reverse |
+| Gas + Brake together | W + S | Burnout (drivetrain ke hisaab se) |
+| Drift | Space | Rear handbrake |
+| CAM | C | Camera cycle |
+| RESET | R | Road spawn par wapas |
+| — | H | Horn |
 
-## Project structure
+## Build
+
+Unity **2022.3.62f3**, Built-in Render Pipeline, Android ARM64 + IL2CPP. Scene aur player settings `Assets/Editor/ProjectSetup.cs` se auto banate hain. CI command:
 
 ```
-Assets/
-  Resources/City/city.glb                       # aapki uploaded file (extension .txt hata diya gaya)
-  Resources/Vehicles/BMW330i/bmw330i.glb        # naya BMW 330i xDrive model (aapki file)
-  Resources/UI/                                  # AI-generated loading/showroom background + icons
-  Scripts/GameBootstrap.cs                      # entry point
-  Scripts/CityBuilder.cs                        # GLB -> city + colliders + spawn point
-  Scripts/ArcadeCarController.cs                # car physics
-  Scripts/VehicleVisuals.cs                     # wheel spin/steer
-  Scripts/MobileControls.cs                     # touch UI with AI icon sprites + speedometer
-  Scripts/LoadingScreen.cs                      # real-time yellow loading bar + percentage
-  Scripts/HomeScreen.cs                         # 3D rotating-car home screen + PLAY button
-  Scripts/ChaseCamera.cs                        # camera modes
-  Editor/ProjectSetup.cs                        # auto scene + APK build method
-.github/workflows/build-apk.yml                 # GitHub Actions -> APK + Release
-CREDITS.md                                      # model/source attribution
+gh workflow run build-apk.yml --ref arena/411eaf4f-shshsh
 ```
 
-## Latest APK
+Fast raw link ke liye `host_only=true` ke saath dobara run karein. Build secrets `UNITY_EMAIL`/`UNITY_PASSWORD` already GitHub Actions me set hain. Details: [UNITY-LICENSE-GUIDE.md](UNITY-LICENSE-GUIDE.md).
 
-Direct download: https://github.com/Rushi2013/Shshsh/releases/download/city-drive-19/CityDrive.apk
+## Project map
 
-Fast raw download (hosted in repo): https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
+```
+Assets/Scripts/ArcadeCarController.cs   physics, gearbox, tyres, burnout
+Assets/Scripts/WheelTelemetry.cs        per-wheel contact/slip data
+Assets/Scripts/VehicleVisuals.cs        wheel + original interior wheel sync
+Assets/Scripts/VehicleEffects.cs        pooled skid marks + smoke
+Assets/Scripts/VehicleAudio.cs          procedural layered audio
+Assets/Scripts/VehicleLights.cs         headlights + brake lights
+Assets/Scripts/MobileControls.cs        circular wheel, pedals, speedometer
+Assets/Scripts/LoadingScreen.cs         real progress + loading audio
+Assets/Scripts/HomeScreen.cs            showroom + PLAY flow
+Assets/Scripts/ChaseCamera.cs           3 camera modes
+Assets/Scripts/CityBuilder.cs           city orientation + colliders
+Assets/Scripts/GameBootstrap.cs         async loading + lighting + material setup
+Assets/Editor/ProjectSetup.cs           scene/Android setup + APK build
+AUDIT.md                                audit and asset-license research
+CREDITS.md                              model/tool attributions
+```
 
-Loading screen ke baad 3D home screen aata hai — BMW circular stand par ghoomta hai, PLAY dabate hi car city road par spawn hoti hai. City GLB ko +90° X se upright kiya gaya hai aur spawn nearest road mesh par hota hai.
+## Verification note
 
-## Note
-
-- City model ~13 MB, naya car GLB ~10 MB; APK expected size roughly 40–90 MB (textures + Unity runtime).
-- Build ke liye Unity **Personal** licence required hai (free). CI me licence secret lagana zaroori hai.
-- Unity Cloud Build / GitHub Actions dono cloud me Unity chalate hain; isliye aapko PC ki zarurat nahi.
+Sandbox me Unity Editor/Android device nahi hai. Yahan se Unity Android build CI par compile aur package hota hai; actual driving feel/FPS device par confirm karna padega. Pichhla safe state Git tag `pre-full-overhaul-backup` par available hai.
