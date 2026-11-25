@@ -339,6 +339,17 @@ jobs:
             echo "===== html head ====="
             head -c 12000 /tmp/probe/page.html || true
           } > Assets/ImportedAssets/LimeWireProbe/PROBE.txt
+          cp /tmp/probe/page.html Assets/ImportedAssets/LimeWireProbe/page.html
+
+          mkdir -p Assets/ImportedAssets/LimeWireProbe/js
+          grep -oE '/build/(chunks|assets)/[^" ]+\.js' /tmp/probe/page.html \
+            | sed 's/&amp;.*//' | sort -u | head -80 \
+            | while read -r js; do
+                name=$(printf '%s' "$js" | tr '/' '_')
+                curl -sS --max-time 30 "https://limewire.com$js" \
+                  -o "Assets/ImportedAssets/LimeWireProbe/js/$name" || true
+              done
+          echo "Downloaded JS chunks: $(find Assets/ImportedAssets/LimeWireProbe/js -type f | wc -l)"
           head -120 Assets/ImportedAssets/LimeWireProbe/PROBE.txt
 
       - name: Commit probe result
