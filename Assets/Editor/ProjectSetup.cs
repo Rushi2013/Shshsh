@@ -38,10 +38,43 @@ public static class ProjectSetup
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
 
-        QualitySettings.shadowDistance = 90f;
+        QualitySettings.shadowDistance = 110f;
+        QualitySettings.shadowResolution = ShadowResolution.High;
+        QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.vSyncCount = 0;
+        QualitySettings.antiAliasing = 0;
+        QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
+        QualitySettings.pixelLightCount = 4;
 
         EnsureScene();
+        EnsureSkybox();
+    }
+
+    /// <summary>Creates one realistic procedural HDR-style sky material (no paid HDRI needed).</summary>
+    private static void EnsureSkybox()
+    {
+        Shader shader = Shader.Find("Skybox/Procedural");
+        if (shader == null) return;
+
+        const string directory = "Assets/Skybox";
+        const string path = directory + "/CityDriveSky.mat";
+        if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+
+        Material sky = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (sky == null)
+        {
+            sky = new Material(shader) { name = "CityDriveSky" };
+            AssetDatabase.CreateAsset(sky, path);
+        }
+        sky.SetFloat("_SunSize", 0.028f);
+        sky.SetFloat("_SunSizeConvergence", 6f);
+        sky.SetFloat("_AtmosphereThickness", 1.05f);
+        sky.SetColor("_SkyTint", new Color(0.48f, 0.63f, 0.86f));
+        sky.SetColor("_GroundColor", new Color(0.42f, 0.40f, 0.38f));
+        sky.SetFloat("_Exposure", 1.12f);
+        EditorUtility.SetDirty(sky);
+        RenderSettings.skybox = sky;
+        AssetDatabase.SaveAssets();
     }
 
     /// <summary>

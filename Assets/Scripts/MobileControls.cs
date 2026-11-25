@@ -4,14 +4,15 @@ using UnityEngine.UI;
 namespace CityDrive
 {
     /// <summary>
-    /// Professional mobile driving HUD: a real circular steering wheel (angle based,
-    /// self-centering), large independent gas/brake/drift buttons with smooth press
-    /// scaling and brake priority, and a safe-area-aware responsive canvas.
+    /// Clean mobile racing HUD: true angular steering wheel on the left, separate
+    /// gas/brake pedals on the right, drift button, live Rigidbody speedometer and
+    /// camera/reset icons. Safe-area aware; no joystick, no text on the pedals.
     /// </summary>
     public sealed class MobileControls : MonoBehaviour
     {
         public ArcadeCarController Car;
         public ChaseCamera Chase;
+        public VehicleAudio Audio;
 
         [Header("Steering wheel")]
         [SerializeField] private float maxWheelVisualDegrees = 135f;
@@ -23,6 +24,11 @@ namespace CityDrive
         [SerializeField] private float pedalResponse = 7f;
         [SerializeField] private float pressedScale = 1.26f;
 
+        [Header("Speedometer")]
+        [SerializeField] private float speedometerMaxKph = 240f;
+        [SerializeField] private float needleMinAngle = -125f;
+        [SerializeField] private float needleMaxAngle = 125f;
+
         public float Steer { get; private set; }
         public float Throttle { get; private set; }
         public float Brake { get; private set; }
@@ -32,7 +38,9 @@ namespace CityDrive
         private RectTransform _gasIcon;
         private RectTransform _brakeIcon;
         private RectTransform _driftIcon;
+        private RectTransform _needle;
         private Text _speedText;
+        private Text _gearText;
 
         private int _steerTouchId = -1;
         private float _lastSteerAngle;
@@ -40,6 +48,7 @@ namespace CityDrive
         private float _throttleSmoothed;
         private float _brakeSmoothed;
         private float _handbrakeSmoothed;
+        private float _displaySpeed;
 
         private const float GasMinX = 0.70f;
         private const float GasMinY = 0.29f;
@@ -68,11 +77,12 @@ namespace CityDrive
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // Safe area: keep every control away from notches and rounded corners.
             RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
             Rect safe = Screen.safeArea;
-            canvasRect.anchorMin = new Vector2(safe.xMin / Screen.width, safe.yMin / Screen.height);
-            canvasRect.anchorMax = new Vector2(safe.xMax / Screen.width, safe.yMax / Screen.height);
+            canvasRect.anchorMin = new Vector2(safe.xMin / Mathf.Max(1f, Screen.width),
+                safe.yMin / Mathf.Max(1f, Screen.height));
+            canvasRect.anchorMax = new Vector2(safe.xMax / Mathf.Max(1f, Screen.width),
+                safe.yMax / Mathf.Max(1f, Screen.height));
             canvasRect.offsetMin = Vector2.zero;
             canvasRect.offsetMax = Vector2.zero;
 
@@ -104,12 +114,33 @@ namespace CityDrive
                 new Vector2(0.02f, 0.86f), new Vector2(0.14f, 0.97f),
                 Color.white, UiTools.GetSprite("UI/icon_reset"));
 
-            UiTools.MakeImage(canvasObject.transform, "Speedometer",
-                new Vector2(0.39f, 0.82f), new Vector2(0.61f, 0.98f),
+            BuildSpeedometer(canvasObject.transform);
+        }
+
+        private void BuildSpeedometer(Transform parent)
+        {
+            Image gauge = UiTools.MakeImage(parent, "Speedometer",
+                new Vector2(0.395f, 0.80f), new Vector2(0.605f, 0.985f),
                 Color.white, UiTools.GetSprite("UI/speed_gauge"));
-            _speedText = UiTools.MakeText(canvasObject.transform, "Speed", "0 km/h", 34,
-                new Vector2(0.41f, 0.84f), new Vector2(0.59f, 0.92f),
-                TextAnchor.MiddleCenter);
+
+            Image needle = UiTools.MakeImage(gauge.rectTransform, "Speed Needle",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Color(1f, 0.24f, 0.18f, 0.95f));
+            _needle = needle.rectTransform;
+            _needle.sizeDelta = new Vector2(9f, 128f);
+            _needle.pivot = new Vector2(0.5f, 0.08f);
+            _needle.anchoredPosition = new Vector2(0f, -22f);
+            _needle.localEulerAngles = new Vector3(0f, 0f, needleMinAngle);
+
+            _speedText = UiTools.MakeText(gauge.rectTransform, "Digital Speed", "0", 52,
+                new Vector2(0.12f, 0.09f), new Vector2(0.88f, 0.45f),
+                TextAnchor.MiddleCenter, new Color(0.96f, 0.99f, 1f));
+            UiTools.MakeText(gauge.rectTransform, "Speed Unit", "km/h", 22,
+                new Vector2(0.12f, 0.02f), new Vector2(0.88f, 0.15f),
+                TextAnchor.MiddleCenter, new Color(0.68f, 0.82f, 0.94f));
+            _gearText = UiTools.MakeText(gauge.rectTransform, "Gear", "D1", 22,
+                new Vector2(0.02f, 0.72f), new Vector2(0.25f, 0.90f),
+                TextAnchor.MiddleCenter, new Color(1f, 0.84f, 0.32f));
         }
 
         private Vector2 WheelCentreScreen()
@@ -118,17 +149,12 @@ namespace CityDrive
             return RectTransformUtility.WorldToScreenPoint(null, _wheel.position);
         }
 
-        private float WheelRadiusScreen()
-        {
-            if (_wheel == null) return 0f;
-            return _wheel.rect.width * 0.5f * Mathf.Max(0.01f, _wheel.lossyScale.x);
-        }
-
         private bool InWheelZone(Vector2 screenPoint)
         {
+            if (_wheel == null) return false;
             Vector2 centre = WheelCentreScreen();
             Vector2 delta = screenPoint - centre;
-            float radius = WheelRadiusScreen() * 1.15f;
+            float radius = _wheel.rect.width * 0.5f * Mathf.Max(0.01f, _wheel.lossyScale.x) * 1.15f;
             return delta.x * delta.x + delta.y * delta.y <= radius * radius;
         }
 
@@ -149,12 +175,13 @@ namespace CityDrive
             for (int i = 0; i < Input.touchCount; i++)
             {
                 Touch touch = Input.GetTouch(i);
-                Vector2 n = new Vector2(touch.position.x / Screen.width,
-                    touch.position.y / Screen.height);
+                Vector2 n = new Vector2(touch.position.x / Mathf.Max(1f, Screen.width),
+                    touch.position.y / Mathf.Max(1f, Screen.height));
 
                 if (InWheelZone(touch.position))
                 {
-                    if (touch.phase == TouchPhase.Began || touch.fingerId != _steerTouchId)
+                    if (_steerTouchId < 0 && touch.phase != TouchPhase.Ended &&
+                        touch.phase != TouchPhase.Canceled)
                     {
                         _steerTouchId = touch.fingerId;
                         _lastSteerAngle = AngleAroundWheel(touch.position);
@@ -166,9 +193,9 @@ namespace CityDrive
                             _steerTarget + Mathf.DeltaAngle(_lastSteerAngle, angle) / gestureSensitivity,
                             -1f, 1f);
                         _lastSteerAngle = angle;
+                        if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                            _steerTouchId = -1;
                     }
-                    if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
-                        _steerTouchId = -1;
                     continue;
                 }
 
@@ -184,7 +211,8 @@ namespace CityDrive
             if (Input.touchCount == 0)
             {
                 Vector2 mouse = Input.mousePosition;
-                Vector2 n = new Vector2(mouse.x / Screen.width, mouse.y / Screen.height);
+                Vector2 n = new Vector2(mouse.x / Mathf.Max(1f, Screen.width),
+                    mouse.y / Mathf.Max(1f, Screen.height));
                 if (Input.GetMouseButton(0))
                 {
                     if (InWheelZone(mouse))
@@ -224,22 +252,32 @@ namespace CityDrive
                 if (Input.GetKey(KeyCode.Space)) driftPressed = true;
                 if (Input.GetKeyDown(KeyCode.C) && Chase != null) Chase.CycleMode();
                 if (Input.GetKeyDown(KeyCode.R) && Car != null) Car.ResetCar();
+                if (Input.GetKeyDown(KeyCode.H) && Car != null) Car.Honk();
             }
 
+            float speedRatio = Car != null ? Mathf.Clamp01(Car.SpeedKph / speedometerMaxKph) : 0f;
+            float response = steerResponse * Mathf.Lerp(1f, 0.75f, speedRatio);
+
             if (keyboardSteer)
-                _steerTarget = Mathf.MoveTowards(_steerTarget, keyboardSteerValue, Time.unscaledDeltaTime * 3f);
+                _steerTarget = Mathf.MoveTowards(_steerTarget, keyboardSteerValue,
+                    Time.unscaledDeltaTime * 3f);
             else if (_steerTouchId < 0)
-                _steerTarget = Mathf.MoveTowards(_steerTarget, 0f, Time.unscaledDeltaTime * steerReturnSpeed);
+                _steerTarget = Mathf.MoveTowards(_steerTarget, 0f,
+                    Time.unscaledDeltaTime * steerReturnSpeed);
 
-            Steer = Mathf.MoveTowards(Steer, _steerTarget, Time.unscaledDeltaTime * steerResponse);
+            Steer = Mathf.MoveTowards(Steer, _steerTarget, Time.unscaledDeltaTime * response);
 
-            // Brake always overrides the accelerator.
-            float throttleTarget = gasPressed && !brakePressed ? 1f : 0f;
+            // Both pedals remain active. Brake priority and burnout torque are handled
+            // by the physics controller, not by deleting the throttle input here.
+            float throttleTarget = gasPressed ? 1f : 0f;
             float brakeTarget = brakePressed ? 1f : 0f;
             float driftTarget = driftPressed ? 1f : 0f;
-            _throttleSmoothed = Mathf.MoveTowards(_throttleSmoothed, throttleTarget, Time.unscaledDeltaTime * pedalResponse);
-            _brakeSmoothed = Mathf.MoveTowards(_brakeSmoothed, brakeTarget, Time.unscaledDeltaTime * pedalResponse);
-            _handbrakeSmoothed = Mathf.MoveTowards(_handbrakeSmoothed, driftTarget, Time.unscaledDeltaTime * pedalResponse);
+            _throttleSmoothed = Mathf.MoveTowards(_throttleSmoothed, throttleTarget,
+                Time.unscaledDeltaTime * pedalResponse);
+            _brakeSmoothed = Mathf.MoveTowards(_brakeSmoothed, brakeTarget,
+                Time.unscaledDeltaTime * pedalResponse);
+            _handbrakeSmoothed = Mathf.MoveTowards(_handbrakeSmoothed, driftTarget,
+                Time.unscaledDeltaTime * pedalResponse);
 
             Throttle = _throttleSmoothed;
             Brake = _brakeSmoothed;
@@ -264,12 +302,26 @@ namespace CityDrive
             ScaleIcon(_brakeIcon, brakeTarget > 0f);
             ScaleIcon(_driftIcon, driftTarget > 0f);
 
-            if (_speedText != null && Car != null)
+            UpdateSpeedometer();
+        }
+
+        private void UpdateSpeedometer()
+        {
+            // Never derived from input: the only source is the player's Rigidbody velocity.
+            float actual = Car != null ? Car.SpeedKph : 0f;
+            if (actual < 0.35f && Car != null && Car.GroundedWheels > 0) actual = 0f;
+            _displaySpeed = Mathf.MoveTowards(_displaySpeed, actual, Time.unscaledDeltaTime * 55f);
+
+            if (_needle != null)
             {
-                int kph = Mathf.RoundToInt(Car.SpeedKph);
-                string gear = Car.CurrentGear + (Brake > 0.2f && Car.SpeedKph < 5f ? "R" : "");
-                _speedText.text = kph + " km/h  " + gear;
+                float t = Mathf.Clamp01(_displaySpeed / speedometerMaxKph);
+                _needle.localEulerAngles = new Vector3(0f, 0f,
+                    Mathf.Lerp(needleMinAngle, needleMaxAngle, t));
             }
+            if (_speedText != null)
+                _speedText.text = Mathf.RoundToInt(_displaySpeed).ToString();
+            if (_gearText != null && Car != null)
+                _gearText.text = Car.IsReversing ? "R" : "D" + Car.CurrentGear;
         }
 
         private void ScaleIcon(RectTransform icon, bool pressed)

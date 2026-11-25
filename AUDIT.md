@@ -1,0 +1,45 @@
+# City Drive — overhaul audit (2026-11-24)
+
+## Phase 1 — project audit
+
+- **Unity:** 2022.3.62f3, Built-in Render Pipeline (no URP/HDRP package).
+- **Packages:** `com.unity.cloud.gltfast` 6.9.0, `com.unity.ugui`, core audio/physics/particles/modules. No Input System package; legacy `Input` is used, enabled by `ProjectSetup`.
+- **Android:** ARM64 + IL2CPP, min SDK 24, landscape; APK built by `ProjectSetup.BuildAndroid` in GameCI.
+- **Scene:** `Assets/Scenes/CityDrive.unity` is generated and saved by `ProjectSetup.EnsureScene()`; runtime systems are added by `GameBootstrap`.
+- **Assets:** user-supplied `city.glb` (roads, pavements, terrain, ramps) and `bmw330i.glb`. An older M3 GTR asset exists but is unused by gameplay.
+- **Before this overhaul:** one controller existed, but it had no per-wheel angular velocity (fake wheel spin integration), no burnout, no tyre smoke/skid marks, no audio system, no real asynchronous loading, fake loading timers, a manually created duplicate interior steering wheel, 4 camera modes (including bonnet/top) instead of the requested 3, and a speedometer that was only text.
+- **GLB inspection:** the 330i GLB has 81 nodes / 41 meshes / 16 materials, wheel nodes `polySurface1-4`, generic interior meshes, and **no steering-wheel or dashboard node**. The manual wheel added in the previous build was therefore removed; no primitive replacement is created.
+- **Backups:** previous branch tip saved as Git tag `pre-full-overhaul-backup`.
+
+## Phase 2 — asset research
+
+| Source | Check | Decision |
+| --- | --- | --- |
+| Vehicle Essentials (Unity Asset Store, ID 194951) | Free, Standard Unity EULA, v1.0, original Unity 2019.4.20, 161 WAV sounds | Suitable license, but requires a signed-in Unity Account download; not imported. |
+| i6 German Free Engine Sound Pack (ID 106037) | Free, Standard Unity EULA, v2.0.0, compatible with Built-in/URP/HDRP, Unity 2020.3.12, 18 WAV loops | Good i6 reference; not downloaded (account required). |
+| Skybox Series Free (ID 103633) | Free, Standard EULA, v4.3, 16 HDRIs, 274.9 MB | Realistic but heavy for mobile and account-gated; not imported. |
+| SuperRev Starter / Cars Audio Pack Vol. 1 | Paid / requires approval | Not purchased, not imported. |
+| Vehicle SFX Free (itch.io) | Page could not be fetched from this sandbox | Not imported; license unverified. |
+| TheDeveloper10/Unity-Speedometer, DreddDev/UnityUISpeedometer | GitHub API reports no license for either repository | No code copied; only the general digital+needle concept is used in our own implementation. |
+
+Because external packs could not be downloaded or license-verified end-to-end here, engine/turbo/tyre/loading audio is generated procedurally at runtime and the sky uses Unity's built-in procedural skybox shader. No copyrighted BMW recordings were used.
+
+## Implemented systems and files
+
+- `ArcadeCarController.cs` — rigidbody physics, 4 raycast wheels, spring/damper, per-wheel angular velocity, slip-based tyre forces in a friction circle, Ackermann steering, gearbox, torque curve, FWD/RWD/AWD, load transfer, anti-roll, drag/downforce, real wheelspin and burnout.
+- `WheelTelemetry.cs` — read-only per-wheel contact/slip data shared with effects and audio.
+- `VehicleVisuals.cs` — wheel mesh sync; syncs only an original interior wheel if the model has one.
+- `VehicleEffects.cs` — pooled skid marks and slip-driven smoke.
+- `VehicleAudio.cs` — procedural engine/load/turbo/tyre/squeal/wind layers, one-shots, interior muffling.
+- `VehicleLights.cs` — headlights and brake-responsive taillights.
+- `ChaseCamera.cs` — close chase, far chase, interior; one camera, smooth mode blend.
+- `MobileControls.cs` — angular wheel HUD, separate pedals, drift, live Rigidbody speedometer + needle, safe area.
+- `LoadingScreen.cs` — real progress input, animated bar, tips, procedural loading audio, no timer-based progress.
+- `HomeScreen.cs` — fixed-centre frame-independent showroom rotation, real staged loading, studio lighting.
+- `CityBuilder.cs` — drivable surface colliders, building boxes, decoration skip list.
+- `GameBootstrap.cs` — async asset loading with real progress, PBR/glass/emissive material upgrades, sky/sun/fog/reflection probe, system wiring.
+- `ProjectSetup.cs` — Android/quality settings and procedural skybox asset for CI builds.
+
+## Verification limits
+
+No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.

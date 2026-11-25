@@ -1,40 +1,61 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace CityDrive
 {
     /// <summary>
-    /// Entry point. Shows a real-time loading screen, builds the city from the supplied
-    /// GLB, spawns the BMW 330i xDrive GLB with rigidbody physics, then presents a 3D
-    /// home screen. Pressing play drops the same car onto a city road.
+    /// Entry point. Asynchronously loads the supplied GLB assets with real progress,
+    /// builds the city and physics car, configures lighting/sky/effects/audio, then
+    /// hands control to the showroom. The same UI instance is reused after PLAY.
     /// </summary>
     public sealed class GameBootstrap : MonoBehaviour
     {
         private const string CarResource = "Vehicles/BMW330i/bmw330i";
+        private const string CityResource = "City/city";
         private const float ModelScale = 90f;
 
         private IEnumerator Start()
         {
             Application.targetFrameRate = 60;
             QualitySettings.vSyncCount = 0;
-            QualitySettings.shadowDistance = 90f;
+            QualitySettings.shadowDistance = 110f;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            Physics.defaultContactOffset = 0.015f;
+            Physics.bounceThreshold = 4f;
 
             LoadingScreen loading = gameObject.AddComponent<LoadingScreen>();
             loading.Show();
-            loading.SetProgress(0.05f, "GAME LOADING", "Checking game assets...");
+            loading.SetProgress(0.02f, "GAME LOADING", "Reading city and vehicle assets...");
 
+            ResourceRequest cityRequest = Resources.LoadAsync<GameObject>(CityResource);
+            ResourceRequest carRequest = Resources.LoadAsync<GameObject>(CarResource);
+            while (!cityRequest.isDone || !carRequest.isDone)
+            {
+                float assetProgress = (cityRequest.progress + carRequest.progress) * 0.5f;
+                loading.SetProgress(0.05f + assetProgress * 0.50f,
+                    "LOADING ASSETS", "Streaming city textures and sedan model...");
+                yield return null;
+            }
+
+            GameObject cityPrefab = cityRequest.asset as GameObject;
+            GameObject carPrefab = carRequest.asset as GameObject;
+            if (cityPrefab == null || carPrefab == null)
+                Debug.LogWarning("[CityDrive] One or more GLB prefabs were unavailable; using fallbacks.");
+
+            loading.SetProgress(0.58f, "BUILDING CITY", "Creating roads, pavements and ramps...");
             GameObject cityHost = new GameObject("City Loader");
             CityBuilder city = cityHost.AddComponent<CityBuilder>();
-            loading.SetProgress(0.20f, "DOWNLOADING ASSETS", "Loading 3D city and textures...");
-            yield return StartCoroutine(city.Build());
-            loading.SetProgress(0.72f, "BUILDING CITY", "Placing roads and buildings...");
-            CreateGroundFallback(cityHost.transform, city.Bounds);
+            yield return StartCoroutine(city.Build(cityPrefab));
 
+            CreateGroundFallback(cityHost.transform, city.Bounds);
+            SetupEnvironment();
+
+            loading.SetProgress(0.78f, "BUILDING CAR", "Preparing suspension, tyres and audio...");
             Vector3 spawn = city.FindSpawnPoint();
             Quaternion spawnRotation = city.SpawnRotation;
-            GameObject car = SpawnCar(spawn, spawnRotation);
+            GameObject car = SpawnCar(spawn, spawnRotation, carPrefab);
             ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
             controller.enabled = false;
 
@@ -45,29 +66,39 @@ namespace CityDrive
                 cameraObject.tag = "MainCamera";
                 cameraComponent = cameraObject.GetComponent<Camera>();
             }
-            cameraComponent.fieldOfView = 65f;
+            cameraComponent.clearFlags = CameraClearFlags.Skybox;
+            cameraComponent.allowHDR = true;
+            cameraComponent.fieldOfView = 64f;
             cameraComponent.farClipPlane = 1200f;
 
             ChaseCamera chase = cameraComponent.gameObject.GetComponent<ChaseCamera>();
             if (chase == null) chase = cameraComponent.gameObject.AddComponent<ChaseCamera>();
             chase.Target = car.transform;
             chase.Car = controller;
+            chase.SetMode(0);
 
-            loading.SetProgress(1f, "READY TO DRIVE", "Welcome to City Drive");
-            yield return new WaitForSecondsRealtime(0.15f);
-            loading.Hide();
+            VehicleAudio audio = car.GetComponent<VehicleAudio>();
+            if (audio != null) audio.CameraRig = chase;
 
+            loading.SetProgress(0.94f, "ALMOST READY", "Showroom is ready...");
             HomeScreen home = gameObject.AddComponent<HomeScreen>();
-            home.Show(city, car, controller, chase, cameraComponent, spawn, spawnRotation, loading, () =>
-            {
-                GameObject controlsHost = new GameObject("Controls");
-                MobileControls controls = controlsHost.AddComponent<MobileControls>();
-                controls.Car = controller;
-                controls.Chase = chase;
-            });
+            home.Show(city, car, controller, chase, cameraComponent, spawn, spawnRotation,
+                loading, audio, () =>
+                {
+                    GameObject controlsHost = new GameObject("Controls");
+                    MobileControls controls = controlsHost.AddComponent<MobileControls>();
+                    controls.Car = controller;
+                    controls.Chase = chase;
+                    controls.Audio = audio;
+                });
+
+            // Everything is constructed before 100% is reported.
+            loading.SetProgress(1f, "READY TO DRIVE", "Welcome to City Drive");
+            yield return null;
+            loading.Hide();
         }
 
-        /// <summary>Flat safety surface just below the city so the tyres always have a road.</summary>
+        /// <summary>Flat safety surface under the city so tyres always have a road.</summary>
         private static void CreateGroundFallback(Transform parent, Bounds cityBounds)
         {
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
@@ -81,24 +112,92 @@ namespace CityDrive
             Material material = shader != null ? new Material(shader) : null;
             if (material != null)
             {
-                material.color = new Color(0.24f, 0.25f, 0.27f);
+                material.color = new Color(0.23f, 0.25f, 0.27f);
+                material.metallic = 0.05f;
+                material.SetFloat("_Glossiness", 0.35f);
                 ground.GetComponent<Renderer>().material = material;
             }
         }
 
-        private static GameObject SpawnCar(Vector3 spawn, Quaternion rotation)
+        /// <summary>
+        /// Procedural daytime sky, coherent sun/ambient/fog and one reflection probe.
+        /// Uses only built-in shaders, so no paid HDRI needs to be downloaded.
+        /// </summary>
+        private static void SetupEnvironment()
+        {
+            Shader skyShader = Shader.Find("Skybox/Procedural");
+            if (skyShader != null)
+            {
+                Material sky = new Material(skyShader) { name = "City Drive Day Sky" };
+                sky.SetFloat("_SunSize", 0.028f);
+                sky.SetFloat("_SunSizeConvergence", 6f);
+                sky.SetFloat("_AtmosphereThickness", 1.05f);
+                sky.SetColor("_SkyTint", new Color(0.48f, 0.63f, 0.86f));
+                sky.SetColor("_GroundColor", new Color(0.42f, 0.40f, 0.38f));
+                sky.SetFloat("_Exposure", 1.12f);
+                RenderSettings.skybox = sky;
+            }
+
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.58f, 0.66f, 0.78f);
+            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.48f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.21f, 0.20f);
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = 300f;
+            RenderSettings.fogEndDistance = 1000f;
+            RenderSettings.fogColor = new Color(0.60f, 0.70f, 0.83f);
+
+            Light sun = null;
+            foreach (Light light in Object.FindObjectsOfType<Light>())
+            {
+                if (light.type == LightType.Directional) { sun = light; break; }
+            }
+            if (sun == null)
+            {
+                GameObject sunObject = new GameObject("Sun", typeof(Light));
+                sunObject.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
+                sun = sunObject.GetComponent<Light>();
+                sun.type = LightType.Directional;
+            }
+            sun.color = new Color(1f, 0.95f, 0.86f);
+            sun.intensity = 1.45f;
+            sun.shadows = LightShadows.Soft;
+            sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.High;
+            sun.shadowBias = 0.035f;
+            sun.shadowNormalBias = 0.035f;
+            RenderSettings.sun = sun;
+
+            if (Object.FindObjectOfType<ReflectionProbe>() == null)
+            {
+                GameObject probeObject = new GameObject("City Reflection Probe", typeof(ReflectionProbe));
+                probeObject.transform.position = Vector3.zero;
+                ReflectionProbe probe = probeObject.GetComponent<ReflectionProbe>();
+                probe.mode = ReflectionProbeMode.Realtime;
+                probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+                probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
+                probe.size = new Vector3(90f, 40f, 90f);
+                probe.intensity = 0.85f;
+                probe.resolution = 128;
+                probe.boxProjection = true;
+                probe.RenderProbe();
+            }
+            DynamicGI.UpdateEnvironment();
+        }
+
+        private static GameObject SpawnCar(Vector3 spawn, Quaternion rotation, GameObject prefab)
         {
             GameObject car = new GameObject("BMW 330i xDrive - Player");
             car.transform.SetPositionAndRotation(spawn, rotation);
 
-            GameObject prefab = Resources.Load<GameObject>(CarResource);
+            GameObject visual = null;
             if (prefab != null)
             {
-                GameObject visual = Instantiate(prefab);
+                visual = Instantiate(prefab);
                 visual.name = "BMW 330i xDrive (GLB)";
                 visual.transform.SetParent(car.transform, false);
                 visual.transform.localScale = Vector3.one * ModelScale;
-                RepairMaterials(visual);
+                UpgradeMaterials(visual);
                 FitCarVisual(car, visual);
             }
             else
@@ -114,103 +213,114 @@ namespace CityDrive
             collider.size = new Vector3(1.9f, 1.4f, 4.3f);
 
             Rigidbody body = car.AddComponent<Rigidbody>();
-            body.mass = 1250f;
+            body.mass = 1420f;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
             VehicleVisuals visuals = car.AddComponent<VehicleVisuals>();
             visuals.FindWheels(car.transform);
-            GameObject interiorWheel = CreateInteriorSteeringWheel(car.transform);
-            visuals.SetInteriorWheel(interiorWheel.transform);
+            // No primitive steering wheel: sync only the model's own mesh if it exists.
+            visuals.FindOriginalInteriorWheel(visual != null ? visual.transform : car.transform);
 
             ArcadeCarController controller = car.AddComponent<ArcadeCarController>();
             controller.SetVisuals(visuals);
+
+            VehicleEffects effects = car.AddComponent<VehicleEffects>();
+            effects.Car = controller;
+
+            VehicleAudio audio = car.AddComponent<VehicleAudio>();
+            audio.Car = controller;
+            VehicleLights.Create(car.transform, controller);
             return car;
         }
 
-        /// <summary>Adds a small 3D driver steering wheel so interior view has visible steering feedback.</summary>
-        private static GameObject CreateInteriorSteeringWheel(Transform car)
+        /// <summary>
+        /// Keeps glTFast textures, upgrades the built-in materials to sensible PBR
+        /// values, makes glass transparent and turns the existing lamp materials
+        /// emissive. No geometry or texture is replaced.
+        /// </summary>
+        private static void UpgradeMaterials(GameObject model)
         {
-            GameObject wheel = new GameObject("Interior Steering Wheel");
-            wheel.transform.SetParent(car, false);
-            wheel.transform.localPosition = new Vector3(-0.34f, 0.36f, 0.52f);
-            wheel.transform.localRotation = Quaternion.Euler(-18f, 180f, 0f);
+            Shader standard = Shader.Find("Standard");
+            if (standard == null) return;
 
-            MeshFilter filter = wheel.AddComponent<MeshFilter>();
-            filter.sharedMesh = CreateTorusMesh(0.19f, 0.022f, 28, 8);
-            MeshRenderer renderer = wheel.AddComponent<MeshRenderer>();
-            Shader shader = Shader.Find("Standard");
-            Material material = shader != null ? new Material(shader) : null;
-            if (material != null)
+            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
             {
-                material.color = new Color(0.07f, 0.08f, 0.09f);
-                renderer.material = material;
+                Material[] materials = renderer.sharedMaterials;
+                bool changed = false;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material material = materials[i];
+                    if (material == null)
+                    {
+                        materials[i] = new Material(standard) { name = "Fallback Body" };
+                        changed = true;
+                        continue;
+                    }
+                    if (material.shader == null || !material.shader.isSupported)
+                    {
+                        material.shader = standard;
+                        changed = true;
+                    }
+                    ConfigurePbr(material);
+                }
+                if (changed) renderer.sharedMaterials = materials;
             }
-
-            for (int i = 0; i < 3; i++)
-            {
-                GameObject spoke = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                spoke.name = "Spoke";
-                spoke.transform.SetParent(wheel.transform, false);
-                float angle = i * 120f * Mathf.Deg2Rad;
-                spoke.transform.localPosition = new Vector3(
-                    Mathf.Cos(angle) * 0.095f, Mathf.Sin(angle) * 0.095f, 0f);
-                spoke.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg);
-                spoke.transform.localScale = new Vector3(0.19f, 0.016f, 0.016f);
-                if (material != null) spoke.GetComponent<Renderer>().material = material;
-            }
-            return wheel;
         }
 
-        private static Mesh CreateTorusMesh(float radius, float tube, int segments, int sides)
+        private static void ConfigurePbr(Material material)
         {
-            Vector3[] vertices = new Vector3[segments * sides];
-            Vector3[] normals = new Vector3[vertices.Length];
-            int[] triangles = new int[segments * sides * 6];
+            string name = material.name.ToLowerInvariant();
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.55f);
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.15f);
 
-            for (int i = 0; i < segments; i++)
+            if (name.Contains("body") || name.Contains("hood") || name.Contains("carpaint") ||
+                name.Contains("bodykit"))
             {
-                float u = i * Mathf.PI * 2f / segments;
-                float cu = Mathf.Cos(u);
-                float su = Mathf.Sin(u);
-                for (int j = 0; j < sides; j++)
-                {
-                    float v = j * Mathf.PI * 2f / sides;
-                    Vector3 normal = new Vector3(cu * Mathf.Cos(v), su * Mathf.Cos(v), Mathf.Sin(v));
-                    int index = i * sides + j;
-                    normals[index] = normal;
-                    vertices[index] = new Vector3(cu * radius, su * radius, 0f) + normal * tube;
-                }
+                if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.72f);
+                if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.88f);
+            }
+            else if (name.Contains("chrome") || name.Contains("rim") || name.Contains("steel") ||
+                     name.Contains("pedal"))
+            {
+                if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.86f);
+                if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.78f);
+            }
+            else if (name.Contains("tire") || name.Contains("tyre") || name.Contains("plast") ||
+                     name.Contains("interior") || name.Contains("leather") || name.Contains("carpet"))
+            {
+                if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.02f);
+                if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.42f);
             }
 
-            int t = 0;
-            for (int i = 0; i < segments; i++)
+            bool glass = name.Contains("glass") || name.Contains("windshield") ||
+                         name.Contains("window") || name.Contains("red_glass") || name.Contains("d_glass");
+            if (glass)
             {
-                int nextI = (i + 1) % segments;
-                for (int j = 0; j < sides; j++)
-                {
-                    int nextJ = (j + 1) % sides;
-                    int a = i * sides + j;
-                    int b = nextI * sides + j;
-                    int c = nextI * sides + nextJ;
-                    int d = i * sides + nextJ;
-                    triangles[t++] = a; triangles[t++] = b; triangles[t++] = c;
-                    triangles[t++] = a; triangles[t++] = c; triangles[t++] = d;
-                }
+                material.SetFloat("_Mode", 3f);
+                material.SetOverrideTag("RenderType", "Transparent");
+                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                material.SetInt("_ZWrite", 0);
+                material.EnableKeyword("_ALPHABLEND_ON");
+                material.renderQueue = 3000;
+                Color c = material.color;
+                c.a = Mathf.Min(c.a, 0.42f);
+                material.color = c;
+                if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.95f);
             }
 
-            Mesh mesh = new Mesh { name = "Interior Steering Wheel Ring" };
-            mesh.vertices = vertices;
-            mesh.normals = normals;
-            mesh.triangles = triangles;
-            mesh.RecalculateBounds();
-            return mesh;
+            if (name.Contains("light") || name.Contains("emissive"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                material.SetColor("_EmissionColor", new Color(0.8f, 0.9f, 1f, 1f));
+            }
         }
 
         /// <summary>
-        /// Chooses the visual rotation from the actual wheel positions: wheels must
-        /// sit BELOW the body and the front wheels must point along +Z of the car.
-        /// This avoids the upside-down model regardless of how glTFast imported it.
+        /// Chooses the visual rotation from actual wheel positions: wheels BELOW the
+        /// body and the front axle along +Z. Fixes upside-down glTF imports.
         /// </summary>
         private static void FitCarVisual(GameObject car, GameObject visual)
         {
@@ -260,8 +370,6 @@ namespace CityDrive
                     float bodyY = bounds.center.y - car.transform.position.y;
                     float frontZ = AverageZ(frontWheels) - car.transform.position.z;
                     float rearZ = AverageZ(rearWheels) - car.transform.position.z;
-
-                    // Wheels must be below the body; front axle must be at +Z.
                     if (wheelY > bodyY - 0.15f) score += 60f;
                     if (frontZ <= rearZ) score += 25f;
                 }
@@ -315,37 +423,6 @@ namespace CityDrive
                 else result.Encapsulate(renderer.bounds);
             }
             return result;
-        }
-
-        /// <summary>
-        /// Keeps the glTFast PBR textures and swaps only shaders that cannot run on
-        /// this device for Unity's built-in Standard shader.
-        /// </summary>
-        private static void RepairMaterials(GameObject model)
-        {
-            Shader standard = Shader.Find("Standard");
-            if (standard == null) return;
-
-            foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
-            {
-                Material[] materials = renderer.sharedMaterials;
-                bool changed = false;
-                for (int i = 0; i < materials.Length; i++)
-                {
-                    Material material = materials[i];
-                    if (material == null)
-                    {
-                        materials[i] = new Material(standard) { name = "Fallback Body" };
-                        changed = true;
-                    }
-                    else if (material.shader == null || !material.shader.isSupported)
-                    {
-                        material.shader = standard;
-                        changed = true;
-                    }
-                }
-                if (changed) renderer.sharedMaterials = materials;
-            }
         }
     }
 }

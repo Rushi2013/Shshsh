@@ -3,9 +3,10 @@ using UnityEngine;
 namespace CityDrive
 {
     /// <summary>
-    /// Keeps the imported BMW wheel meshes in sync with the simulated wheels.
-    /// Supports separate Ackermann angles per front wheel and an optional 3D
-    /// interior steering wheel that follows the same steering input.
+    /// Keeps the imported sedan wheel meshes in sync with the simulated wheels and
+    /// rotates the car's ORIGINAL steering-wheel mesh if one is present. No primitive
+    /// interior wheel is created: the supplied 330i GLB has generic interior body
+    /// meshes only, so an overlapping fake wheel is deliberately not spawned.
     /// </summary>
     public sealed class VehicleVisuals : MonoBehaviour
     {
@@ -13,8 +14,11 @@ namespace CityDrive
         private readonly Quaternion[] _baseRotations = new Quaternion[4];
         private bool _spinAroundLocalZ;
 
-        private Transform _interiorWheel;
-        private Quaternion _interiorBaseRotation;
+        private Transform _originalInteriorWheel;
+        private Quaternion _originalInteriorBaseRotation;
+        private Vector3 _originalInteriorAxis = Vector3.forward;
+
+        public bool HasOriginalInteriorWheel => _originalInteriorWheel != null;
 
         public void FindWheels(Transform modelRoot)
         {
@@ -27,6 +31,41 @@ namespace CityDrive
                 _baseRotations[index] = t.localRotation;
                 if (t.name.StartsWith("polySurface")) _spinAroundLocalZ = true;
             }
+        }
+
+        /// <summary>
+        /// Looks only for a steering-wheel mesh that belongs to the imported model.
+        /// The manual fallback wheel was removed; nothing is created here.
+        /// </summary>
+        public void FindOriginalInteriorWheel(Transform modelRoot)
+        {
+            _originalInteriorWheel = null;
+            if (modelRoot == null) return;
+
+            foreach (Transform t in modelRoot.GetComponentsInChildren<Transform>(true))
+            {
+                string name = t.name.ToLowerInvariant();
+                if (!name.Contains("steer") || name.Contains("logo")) continue;
+                Renderer renderer = t.GetComponent<Renderer>();
+                if (renderer == null) continue;
+                _originalInteriorWheel = t;
+                _originalInteriorBaseRotation = t.localRotation;
+                _originalInteriorAxis = ClosestLocalAxis(t, modelRoot.forward);
+                Debug.Log("[CityDrive] Original steering wheel synced: " + t.name);
+                return;
+            }
+        }
+
+        private static Vector3 ClosestLocalAxis(Transform node, Vector3 carForward)
+        {
+            Transform parent = node.parent;
+            Vector3 localForward = parent != null ? parent.InverseTransformDirection(carForward) : carForward;
+            float ax = Mathf.Abs(localForward.x);
+            float ay = Mathf.Abs(localForward.y);
+            float az = Mathf.Abs(localForward.z);
+            if (ax >= ay && ax >= az) return new Vector3(Mathf.Sign(localForward.x), 0f, 0f);
+            if (ay >= az) return new Vector3(0f, Mathf.Sign(localForward.y), 0f);
+            return new Vector3(0f, 0f, Mathf.Sign(localForward.z));
         }
 
         private static int WheelIndex(string name)
@@ -43,12 +82,6 @@ namespace CityDrive
                 case "polySurface1": return 3;
                 default: return -1;
             }
-        }
-
-        public void SetInteriorWheel(Transform wheel)
-        {
-            _interiorWheel = wheel;
-            if (wheel != null) _interiorBaseRotation = wheel.localRotation;
         }
 
         /// <summary>Converts a steering angle around the car's up axis into wheel-local space.</summary>
@@ -73,15 +106,14 @@ namespace CityDrive
                 float spin = spinDegrees != null && i < spinDegrees.Length ? spinDegrees[i] : 0f;
                 Quaternion roll = Quaternion.AngleAxis(spin,
                     _spinAroundLocalZ ? Vector3.forward : Vector3.right);
-                Quaternion localSteer = SteerInWheelSpace(wheel, steer[i]);
-                wheel.localRotation = localSteer * _baseRotations[i] * roll;
+                wheel.localRotation = SteerInWheelSpace(wheel, steer[i]) * _baseRotations[i] * roll;
             }
 
-            if (_interiorWheel != null)
+            if (_originalInteriorWheel != null)
             {
                 float averageSteer = (frontLeftSteer + frontRightSteer) * 0.5f;
-                _interiorWheel.localRotation = _interiorBaseRotation *
-                    Quaternion.AngleAxis(averageSteer, Vector3.forward);
+                _originalInteriorWheel.localRotation = _originalInteriorBaseRotation *
+                    Quaternion.AngleAxis(averageSteer, _originalInteriorAxis);
             }
         }
     }

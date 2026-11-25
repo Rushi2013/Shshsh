@@ -7,9 +7,10 @@ using UnityEngine.UI;
 namespace CityDrive
 {
     /// <summary>
-    /// Home screen: the actual BMW model rotates on a circular stand in 3D.
-    /// Tapping PLAY shows a second fast loading screen, then the same car is placed
-    /// on a city road and the chase camera + touch controls take over.
+    /// Showroom screen. The same car model rotates at a fixed position using
+    /// frame-rate-independent yaw. PLAY performs real setup stages (showroom teardown,
+    /// car placement, city activation, engine start) and reports each as loading
+    /// progress instead of using a decorative timer.
     /// </summary>
     public sealed class HomeScreen : MonoBehaviour
     {
@@ -19,18 +20,21 @@ namespace CityDrive
         private ChaseCamera _chase;
         private Camera _camera;
         private LoadingScreen _loading;
+        private VehicleAudio _audio;
         private Vector3 _spawn;
         private Quaternion _spawnRotation;
         private Action _onPlay;
         private GameObject _showroom;
         private GameObject _canvasObject;
         private bool _playing;
+        private float _showroomYaw;
+        private readonly Vector3 _showroomPosition = new Vector3(0f, 0.72f, 0f);
 
         public bool PlayPressed => _playing;
 
         public void Show(CityBuilder city, GameObject car, ArcadeCarController controller,
             ChaseCamera chase, Camera camera, Vector3 spawn, Quaternion spawnRotation,
-            LoadingScreen loading, Action onPlay)
+            LoadingScreen loading, VehicleAudio audio, Action onPlay)
         {
             _city = city;
             _car = car;
@@ -40,6 +44,7 @@ namespace CityDrive
             _spawn = spawn;
             _spawnRotation = spawnRotation;
             _loading = loading;
+            _audio = audio;
             _onPlay = onPlay;
 
             if (_city != null && _city.Root != null) _city.Root.SetActive(false);
@@ -52,12 +57,13 @@ namespace CityDrive
             }
             _controller.enabled = false;
             _chase.enabled = false;
+            if (_audio != null) _audio.SetActive(false);
 
-            _car.transform.position = new Vector3(0f, 0.72f, 0f);
-            _car.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
-            _camera.transform.position = new Vector3(0f, 2.1f, -7.2f);
-            _camera.transform.LookAt(new Vector3(0f, 0.85f, 0f));
-            _camera.fieldOfView = 54f;
+            _showroomYaw = 180f;
+            _car.transform.SetPositionAndRotation(_showroomPosition, Quaternion.Euler(0f, _showroomYaw, 0f));
+            _camera.transform.position = new Vector3(0f, 2.25f, -7.6f);
+            _camera.transform.LookAt(new Vector3(0f, 0.88f, 0f));
+            _camera.fieldOfView = 52f;
             _camera.farClipPlane = 200f;
 
             BuildShowroom();
@@ -73,14 +79,14 @@ namespace CityDrive
             platform.transform.SetParent(_showroom.transform, false);
             platform.transform.localScale = new Vector3(6f, 0.12f, 6f);
             platform.transform.position = new Vector3(0f, -0.12f, 0f);
-            SetMaterial(platform, new Color(0.10f, 0.14f, 0.19f), null);
+            SetMaterial(platform, new Color(0.10f, 0.13f, 0.18f), null);
 
             GameObject ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             ring.name = "Stand Glow";
             ring.transform.SetParent(_showroom.transform, false);
             ring.transform.localScale = new Vector3(6.25f, 0.045f, 6.25f);
             ring.transform.position = new Vector3(0f, -0.24f, 0f);
-            SetMaterial(ring, new Color(0.10f, 0.72f, 0.95f), null);
+            SetMaterial(ring, new Color(0.10f, 0.58f, 0.82f), null);
 
             Texture2D showroomTexture = Resources.Load<Texture2D>("UI/showroom_bg");
             if (showroomTexture != null)
@@ -88,28 +94,37 @@ namespace CityDrive
                 GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
                 backdrop.name = "Showroom Backdrop";
                 backdrop.transform.SetParent(_showroom.transform, false);
-                backdrop.transform.position = new Vector3(0f, 2.5f, 10f);
-                backdrop.transform.localScale = new Vector3(24f, 12f, 1f);
+                backdrop.transform.position = new Vector3(0f, 2.6f, 11f);
+                backdrop.transform.localScale = new Vector3(26f, 13f, 1f);
                 backdrop.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
                 SetMaterial(backdrop, Color.white, showroomTexture);
             }
 
-            GameObject lamp = new GameObject("Showroom Light", typeof(Light));
+            AddStudioLight("Key Light", new Vector3(4f, 7f, -5f), new Color(1f, 0.94f, 0.84f), 4.2f, true);
+            AddStudioLight("Fill Light", new Vector3(-5f, 4f, 2f), new Color(0.60f, 0.76f, 1f), 2.1f, false);
+            AddStudioLight("Rim Light", new Vector3(1f, 5f, 7f), new Color(0.86f, 0.92f, 1f), 2.6f, false);
+        }
+
+        private void AddStudioLight(string name, Vector3 position, Color color, float intensity, bool shadows)
+        {
+            GameObject lamp = new GameObject(name, typeof(Light));
             lamp.transform.SetParent(_showroom.transform, false);
-            lamp.transform.position = new Vector3(0f, 5f, -3f);
+            lamp.transform.position = position;
+            lamp.transform.LookAt(new Vector3(0f, 0.7f, 0f));
             Light light = lamp.GetComponent<Light>();
-            light.type = LightType.Point;
-            light.intensity = 3f;
-            light.range = 22f;
-            light.color = new Color(0.62f, 0.86f, 1f);
+            light.type = LightType.Spot;
+            light.color = color;
+            light.intensity = intensity;
+            light.range = 30f;
+            light.spotAngle = 68f;
+            light.shadows = shadows ? LightShadows.Soft : LightShadows.None;
         }
 
         private static void SetMaterial(GameObject go, Color color, Texture texture)
         {
             Renderer renderer = go.GetComponent<Renderer>();
             if (renderer == null) return;
-            Shader shader = Shader.Find("Unlit/Texture");
-            if (shader == null) shader = Shader.Find("Standard");
+            Shader shader = Shader.Find("Standard");
             if (shader == null) return;
             Material material = new Material(shader);
             material.color = color;
@@ -120,9 +135,7 @@ namespace CityDrive
         private void BuildUi()
         {
             if (FindObjectOfType<EventSystem>() == null)
-            {
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            }
 
             _canvasObject = new GameObject("Home UI", typeof(Canvas), typeof(CanvasScaler));
             _canvasObject.transform.SetParent(transform, false);
@@ -134,24 +147,34 @@ namespace CityDrive
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
+            RectTransform rect = _canvasObject.GetComponent<RectTransform>();
+            Rect safe = Screen.safeArea;
+            rect.anchorMin = new Vector2(safe.xMin / Mathf.Max(1f, Screen.width),
+                safe.yMin / Mathf.Max(1f, Screen.height));
+            rect.anchorMax = new Vector2(safe.xMax / Mathf.Max(1f, Screen.width),
+                safe.yMax / Mathf.Max(1f, Screen.height));
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
             UiTools.MakeText(_canvasObject.transform, "Home Title", "CITY DRIVE", 80,
                 new Vector2(0.1f, 0.82f), new Vector2(0.9f, 0.94f), TextAnchor.MiddleCenter,
                 new Color(1f, 0.84f, 0.30f));
             UiTools.MakeText(_canvasObject.transform, "Home Car", "BMW 330i xDrive", 36,
                 new Vector2(0.1f, 0.75f), new Vector2(0.9f, 0.82f), TextAnchor.MiddleCenter,
                 new Color(0.70f, 0.90f, 1f));
-            UiTools.MakeText(_canvasObject.transform, "Home Hint", "DRIVE ANYWHERE  •  OPEN WORLD  •  DRIFT", 26,
+            UiTools.MakeText(_canvasObject.transform, "Home Hint",
+                "OPEN WORLD  •  BURNOUTS  •  DRIFT  •  3 CAMERAS", 26,
                 new Vector2(0.1f, 0.16f), new Vector2(0.9f, 0.22f), TextAnchor.MiddleCenter,
                 new Color(0.84f, 0.88f, 0.94f));
 
             GameObject buttonObject = new GameObject("Play Button", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(_canvasObject.transform, false);
-            RectTransform rect = buttonObject.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.40f, 0.28f);
-            rect.anchorMax = new Vector2(0.60f, 0.47f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(0.40f, 0.28f);
+            buttonRect.anchorMax = new Vector2(0.60f, 0.47f);
+            buttonRect.offsetMin = Vector2.zero;
+            buttonRect.offsetMax = Vector2.zero;
             Image buttonImage = buttonObject.GetComponent<Image>();
             buttonImage.sprite = UiTools.GetSprite("UI/icon_play");
             buttonImage.color = new Color(1f, 0.92f, 0.66f, 1f);
@@ -159,7 +182,6 @@ namespace CityDrive
             Button button = buttonObject.GetComponent<Button>();
             button.targetGraphic = buttonImage;
             button.onClick.AddListener(Play);
-
             UiTools.MakeText(buttonObject.transform, "Play Label", "PLAY", 32,
                 new Vector2(0f, -0.35f), new Vector2(1f, 0.12f), TextAnchor.MiddleCenter,
                 new Color(0.06f, 0.09f, 0.13f));
@@ -167,11 +189,13 @@ namespace CityDrive
 
         private void Update()
         {
-            if (_playing) return;
-            if (_car != null)
-                _car.transform.Rotate(0f, 26f * Time.unscaledDeltaTime, 0f, Space.World);
+            if (_playing || _car == null) return;
 
-            // Direct touch/mouse hit test as a reliable fallback to the UI Button.
+            // Frame-rate-independent, fixed-centre yaw. No transform drift or stutter.
+            _showroomYaw = (_showroomYaw + 26f * Time.unscaledDeltaTime) % 360f;
+            _car.transform.SetPositionAndRotation(_showroomPosition,
+                Quaternion.Euler(0f, _showroomYaw, 0f));
+
             if (Input.touchCount > 0)
             {
                 Touch touch = Input.GetTouch(0);
@@ -185,15 +209,15 @@ namespace CityDrive
 
         private void CheckPlayTap(Vector2 pixel)
         {
-            float x = pixel.x / Screen.width;
-            float y = pixel.y / Screen.height;
+            float x = pixel.x / Mathf.Max(1f, Screen.width);
+            float y = pixel.y / Mathf.Max(1f, Screen.height);
             if (x >= 0.36f && x <= 0.64f && y >= 0.25f && y <= 0.50f) Play();
         }
 
         public void Play()
         {
             if (_playing) return;
-            _playing = true;
+            _playing = true; // pauses showroom rotation immediately
             StartCoroutine(StartGameplay());
         }
 
@@ -202,23 +226,16 @@ namespace CityDrive
             if (_loading != null)
             {
                 _loading.Show("UI/loading_bg_2");
-                _loading.SetProgress(0.10f, "LOADING CITY AND CAR MODEL", "Preparing roads, buildings and BMW 330i...");
+                _loading.SetProgress(0.08f, "LOADING CITY AND CAR MODEL",
+                    "Clearing showroom and preparing the road...");
             }
-            yield return new WaitForSecondsRealtime(0.15f);
-
-            if (_loading != null)
-                _loading.SetProgress(0.55f, "LOADING CITY AND CAR MODEL", "Textures and physics ready");
-            yield return new WaitForSecondsRealtime(0.15f);
-
-            if (_loading != null)
-                _loading.SetProgress(0.85f, "STARTING ENGINE", "Getting behind the wheel...");
-            yield return new WaitForSecondsRealtime(0.15f);
-
             if (_showroom != null) Destroy(_showroom);
             if (_canvasObject != null) Destroy(_canvasObject);
+            yield return null;
 
-            if (_city != null && _city.Root != null) _city.Root.SetActive(true);
-
+            if (_loading != null)
+                _loading.SetProgress(0.34f, "LOADING CITY AND CAR MODEL",
+                    "Placing the sedan on the city road...");
             Rigidbody body = _car.GetComponent<Rigidbody>();
             if (body != null)
             {
@@ -230,21 +247,39 @@ namespace CityDrive
             }
             _car.transform.SetPositionAndRotation(_spawn, _spawnRotation);
             _controller.ConfigureSpawn(_spawn, _spawnRotation);
+            Physics.SyncTransforms();
+            yield return null;
+
+            if (_loading != null)
+                _loading.SetProgress(0.62f, "STARTING ENGINE",
+                    "Bringing the drivetrain and cameras online...");
+            if (_city != null && _city.Root != null) _city.Root.SetActive(true);
             _controller.enabled = true;
             _chase.enabled = true;
-            _camera.fieldOfView = 65f;
+            if (_audio != null) _audio.SetActive(true);
+            _camera.fieldOfView = 64f;
             _camera.farClipPlane = 1200f;
-            _camera.transform.position = _spawn + new Vector3(0f, 4f, -8f);
+            _camera.transform.position = _spawn + new Vector3(0f, 3.6f, -7.6f);
             _camera.transform.LookAt(_spawn + Vector3.up);
+            yield return null;
 
+            // All real work is finished before reporting 100%.
             if (_loading != null)
             {
                 _loading.SetProgress(1f, "READY", "City Drive is ready");
-                yield return new WaitForSecondsRealtime(0.2f);
+                yield return null;
                 _loading.Hide();
             }
 
             if (_onPlay != null) _onPlay();
+        }
+
+        /// <summary>Allows a future main-menu return to resume the same smooth rotation.</summary>
+        public void ResumeShowroom()
+        {
+            _playing = false;
+            _car.transform.SetPositionAndRotation(_showroomPosition,
+                Quaternion.Euler(0f, _showroomYaw, 0f));
         }
     }
 }

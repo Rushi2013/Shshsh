@@ -5,9 +5,10 @@ using UnityEngine;
 namespace CityDrive
 {
     /// <summary>
-    /// Loads the supplied Sketchfab city GLB (imported by glTFast at edit time),
-    /// centres it on the origin and gives every useful mesh a collider so the car
-    /// can drive on roads and crash into buildings.
+    /// Loads the supplied city GLB, orients it upright, and creates colliders only
+    /// where they are useful: roads, pavements, ramps and terrain get proper mesh
+    /// colliders; buildings get cheap boxes; small decorations get none. A separate
+    /// ground fallback guarantees the wheels always have a driveable surface.
     /// </summary>
     public sealed class CityBuilder : MonoBehaviour
     {
@@ -18,9 +19,10 @@ namespace CityDrive
         public GameObject Root => _city;
         public Quaternion SpawnRotation { get; private set; } = Quaternion.identity;
 
-        public IEnumerator Build()
+        /// <param name="prefab">Optional prefab already loaded asynchronously by GameBootstrap.</param>
+        public IEnumerator Build(GameObject prefab = null)
         {
-            GameObject prefab = Resources.Load<GameObject>("City/city");
+            if (prefab == null) prefab = Resources.Load<GameObject>("City/city");
             if (prefab == null)
             {
                 Debug.LogError("[CityDrive] Assets/Resources/City/city.glb could not be loaded. " +
@@ -47,10 +49,6 @@ namespace CityDrive
             IsReady = true;
         }
 
-        /// <summary>
-        /// Picks the rotation in which roads are flat (thin on Y) and buildings are
-        /// tall (large on Y), instead of assuming a fixed Sketchfab axis conversion.
-        /// </summary>
         private void OrientCity()
         {
             List<Renderer> roads = new List<Renderer>();
@@ -135,12 +133,20 @@ namespace CityDrive
             Bounds = ComputeBounds();
         }
 
-        private static bool LooksLikeRoad(string name)
+        private static bool IsDrivableSurface(string name)
         {
             string lower = name.ToLowerInvariant();
             return lower.Contains("road") || lower.Contains("street") || lower.Contains("ground") ||
                    lower.Contains("floor") || lower.Contains("asphalt") || lower.Contains("pavement") ||
-                   lower.Contains("sidewalk") || lower.Contains("terrain") || lower.Contains("surface");
+                   lower.Contains("sidewalk") || lower.Contains("terrain") || lower.Contains("surface") ||
+                   lower.Contains("rampa") || lower.Contains("ramp");
+        }
+
+        private static bool IsBuilding(string name)
+        {
+            string lower = name.ToLowerInvariant();
+            return lower.Contains("building") || lower.Contains("house") || lower.Contains("tower") ||
+                   lower.Contains("facade") || lower.Contains("wall");
         }
 
         private void AddColliders()
@@ -148,6 +154,7 @@ namespace CityDrive
             MeshFilter[] filters = _city.GetComponentsInChildren<MeshFilter>(true);
             int meshColliders = 0;
             int boxColliders = 0;
+            int skipped = 0;
 
             foreach (MeshFilter filter in filters)
             {
@@ -159,23 +166,28 @@ namespace CityDrive
 
                 Bounds local = mesh.bounds;
                 float biggest = Mathf.Max(local.size.x, local.size.y, local.size.z);
-                if (biggest < 0.3f) continue; // tiny decoration, not worth a collider
+                string name = go.name + " " + (go.transform.parent != null ? go.transform.parent.name : "");
+                bool drivable = IsDrivableSurface(name);
+                bool building = IsBuilding(name);
+                // Large unnamed meshes are usually buildings; tiny decorations get no collider.
+                if (!drivable && !building && biggest < 8f)
+                {
+                    skipped++;
+                    continue;
+                }
+                if (!drivable && !building) building = true;
 
-                int triangles = mesh.triangles.Length / 3;
-                bool road = LooksLikeRoad(go.name) ||
-                            (go.transform.parent != null && LooksLikeRoad(go.transform.parent.name));
                 bool readable = mesh.isReadable;
-
-                if (readable && ((road && triangles <= 200000) || triangles <= 6000))
+                if (drivable && readable && mesh.triangles.Length / 3 <= 260000)
                 {
                     MeshCollider collider = go.AddComponent<MeshCollider>();
                     collider.sharedMesh = mesh;
                     collider.convex = false;
                     meshColliders++;
                 }
-                else if (triangles <= 200000 || biggest > 4f)
+                else if (building || drivable)
                 {
-                    // Cheap approximation for detailed buildings/statues.
+                    // Cheap approximation for detailed buildings and unreadable roads.
                     BoxCollider collider = go.AddComponent<BoxCollider>();
                     collider.center = local.center;
                     collider.size = new Vector3(
@@ -184,11 +196,11 @@ namespace CityDrive
                         Mathf.Max(local.size.z, 0.05f));
                     boxColliders++;
                 }
-
                 go.isStatic = true;
             }
 
-            Debug.Log("[CityDrive] City colliders: " + meshColliders + " mesh / " + boxColliders + " box.");
+            Debug.Log("[CityDrive] City colliders: " + meshColliders + " mesh / " + boxColliders +
+                      " box, " + skipped + " decorative meshes skipped.");
         }
 
         /// <summary>Picks a real road mesh near the town centre and spawns the car on it.</summary>
