@@ -1,0 +1,4 @@
+import{j as n}from"./jsx-runtime-D_zvdyIk.js";import{v as d}from"./chunk-6KYCQHYJ-9NW3t0-R.js";import{c as p}from"./index-BBTYVrYq.js";import{B as u,d as i,c as f,e as l,a as c,b}from"./base-button-BHJVfc5b.js";const B=(e,s)=>{const{className:r,disabled:a,size:t="md",theme:o="primary",...m}=e;return n.jsx(u,{...m,size:t,theme:o,disabled:a,className:p("default:whitespace-nowrap default:rounded-full",{[f[o]]:!a,[i[o]]:a},l[t],c[t],b,r),ref:s})},R=d.forwardRef(B);export{R as B};
+!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{},n=(new Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="d92733e6-13fa-5754-813b-b1fcd3b3b8c0")}catch(e){}}()
+//# debugId=d92733e6-13fa-5754-813b-b1fcd3b3b8c0
+//# sourceMappingURL=button-CcV6isZx.js.map

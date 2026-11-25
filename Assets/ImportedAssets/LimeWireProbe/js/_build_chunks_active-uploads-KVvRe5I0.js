@@ -1,0 +1,4 @@
+import{v as a}from"./chunk-6KYCQHYJ-9NW3t0-R.js";const d=["queued","processing"],n=new Map,o=new Set;let r=0;const u=()=>{const t=Array.from(n.values()).reduce((e,s)=>e+s,0);t!==r&&(r=t,o.forEach(e=>e()))},g=t=>{const e=()=>{const s=t.getEntries().filter(c=>d.includes(c.stage)).length;s?n.set(t,s):n.delete(t),u()};return t.addEvents({entryAdded:e,entryUpdated:e,entryRemoved:e})},i=()=>r,l=t=>(o.add(t),()=>o.delete(t)),v=()=>a.useSyncExternalStore(l,i,()=>0);export{g as t,v as u};
+!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{},n=(new Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="faf24791-147b-54b8-b8e7-eb21be92e1f3")}catch(e){}}()
+//# debugId=faf24791-147b-54b8-b8e7-eb21be92e1f3
+//# sourceMappingURL=active-uploads-KVvRe5I0.js.map
