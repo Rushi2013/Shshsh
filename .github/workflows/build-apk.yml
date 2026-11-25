@@ -25,6 +25,18 @@ on:
         description: "Inspect a share/download page and commit its HTML for link discovery"
         type: string
         default: ''
+      browser_url:
+        description: "Share page to open in headless Chromium and download through"
+        type: string
+        default: ''
+      browser_file:
+        description: "Filename text to click (leave blank for Download all files)"
+        type: string
+        default: ''
+      browser_target_dir:
+        description: "Folder to commit downloaded file chunks into"
+        type: string
+        default: 'Assets/ImportedAssets/LimeWireDownloads'
 
 permissions:
   contents: write
@@ -32,7 +44,7 @@ permissions:
 
 jobs:
   build-apk:
-    if: ${{ !inputs.host_only && !inputs.fetch_assets && inputs.probe_url == '' }}
+    if: ${{ !inputs.host_only && !inputs.fetch_assets && inputs.probe_url == '' && inputs.browser_url == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
@@ -91,7 +103,7 @@ jobs:
           files: build/**/*.apk
 
   host-apk:
-    if: ${{ inputs.host_only && !inputs.fetch_assets && inputs.probe_url == '' }}
+    if: ${{ inputs.host_only && !inputs.fetch_assets && inputs.probe_url == '' && inputs.browser_url == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -117,7 +129,7 @@ jobs:
           git push
 
   fetch-assets:
-    if: ${{ inputs.fetch_assets && inputs.probe_url == '' }}
+    if: ${{ inputs.fetch_assets && inputs.probe_url == '' && inputs.browser_url == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current branch
@@ -309,7 +321,7 @@ jobs:
           TARGET_DIR: ${{ inputs.target_dir }}
 
   probe-url:
-    if: ${{ inputs.probe_url != '' }}
+    if: ${{ inputs.probe_url != '' && inputs.browser_url == '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout current branch
@@ -363,4 +375,115 @@ jobs:
             exit 0
           fi
           git commit -m "Probe LimeWire share page for direct links"
+          git push origin HEAD:"$GITHUB_REF_NAME"
+
+  browser-download:
+    if: ${{ inputs.browser_url != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null
+          npm install playwright@latest >/dev/null
+          npx playwright install --with-deps chromium
+
+      - name: Download through the share page
+        env:
+          BROWSER_URL: ${{ inputs.browser_url }}
+          BROWSER_FILE: ${{ inputs.browser_file }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/limewire
+          cat > download.js <<'JS'
+          const { chromium } = require('playwright');
+          const fs = require('fs');
+
+          (async () => {
+            const url = process.env.BROWSER_URL;
+            const wanted = process.env.BROWSER_FILE || '';
+            const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+            const context = await browser.newContext({
+              acceptDownloads: true,
+              viewport: { width: 1400, height: 1000 },
+            });
+            const page = await context.newPage();
+            page.on('console', m => console.log('BROWSER:', m.text()));
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+            await page.waitForTimeout(8000);
+
+            for (const text of ['I Accept', 'Accept', 'Continue', 'Download anyway']) {
+              try {
+                const btn = page.getByRole('button', { name: text, exact: false }).first();
+                if (await btn.isVisible({ timeout: 1500 })) {
+                  await btn.click({ timeout: 3000 });
+                }
+              } catch (e) {
+                // Not present; continue.
+              }
+            }
+
+            const buttons = await page.locator('button').all();
+            console.log('Buttons found:', buttons.length);
+            let saved = false;
+            for (const b of buttons) {
+              let label = '';
+              try { label = (await b.innerText({ timeout: 1000 })) || ''; } catch (e) {}
+              console.log('BUTTON:', JSON.stringify(label.slice(0, 160)));
+              const match = wanted ? label.includes(wanted) : label.includes('Download all');
+              if (!match) continue;
+              try {
+                const [download] = await Promise.all([
+                  page.waitForEvent('download', { timeout: 900000 }),
+                  b.click({ timeout: 15000 }),
+                ]);
+                const name = download.suggestedFilename() || 'download.bin';
+                const out = '/tmp/limewire/' + name;
+                await download.saveAs(out);
+                console.log('SAVED:', name, fs.statSync(out).size);
+                saved = true;
+                break;
+              } catch (e) {
+                console.log('CLICK_FAILED:', e.message);
+              }
+            }
+            await browser.close();
+            if (!saved) throw new Error('No matching download button produced a file');
+          })().catch(e => { console.error('FATAL', e.message); process.exit(1); });
+          JS
+          node download.js
+
+      - name: Chunk and commit downloaded file
+        env:
+          BROWSER_TARGET_DIR: ${{ inputs.browser_target_dir }}
+        run: |
+          set -euo pipefail
+          file=$(find /tmp/limewire -type f | head -n 1)
+          if [ -z "$file" ]; then
+            echo "No downloaded file found."
+            exit 1
+          fi
+          name=$(basename "$file")
+          mkdir -p "$BROWSER_TARGET_DIR"
+          {
+            echo "name=$name"
+            echo "size=$(stat -c%s "$file")"
+            sha256sum "$file"
+          } > "$BROWSER_TARGET_DIR/MANIFEST.txt"
+          split -b 45m -d "$file" "$BROWSER_TARGET_DIR/$name.part-"
+          ls -lh "$BROWSER_TARGET_DIR" | head -30
+
+          git config user.name 'Arena Agent'
+          git config user.email 'agent@users.noreply.github.com'
+          git add -f "$BROWSER_TARGET_DIR"
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "Fetch LimeWire share file via headless browser"
           git push origin HEAD:"$GITHUB_REF_NAME"
