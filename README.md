@@ -2,30 +2,30 @@
 
 Ek **real Unity 3D** project hai (HTML/JS nahi). Ismein aapki supplied city GLB aur BMW 330i-inspired sedan GLB, physics-driven car controller, circular touch steering, burnout/drift effects, layered car audio aur mobile HUD hai.
 
-## Latest APK — city-drive-24
+## Latest APK — city-drive-26
 
 **Fast raw download (repo-hosted):** https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
 
-**Release download:** https://github.com/Rushi2013/Shshsh/releases/download/city-drive-24/CityDrive.apk
+**Release download:** https://github.com/Rushi2013/Shshsh/releases/download/city-drive-26/CityDrive.apk
 
-**Verified CI build:** https://github.com/Rushi2013/Shshsh/actions/runs/45549821712 ✅
+**Verified CI build:** https://github.com/Rushi2013/Shshsh/actions/runs/45563875786 ✅
 
-SHA-256: `ca98662a9248d112dfe63992ab19cb868e492d45202cfdbca7d77b75bff861f6`
+SHA-256: `4d93511172e875606ac9c7d4e954725da7700217b1aac11d931cb34796a2e2b9`
 
 Phone par APK download karke install karein (unknown apps allow karna pad sakta hai).
 
 ## Kya kya hai
 
 - **Physics:** Rigidbody + 4 raycast wheels, spring/damper suspension, per-wheel angular velocity, slip-based tyre forces, friction circle, anti-roll bars, weight transfer, aero drag/downforce, automatic 5-speed gearbox with torque curve, configurable FWD/RWD/AWD.
-- **Steering:** circular wheel UI with angular finger gesture, configurable limit/sensitivity/self-centering, Ackermann front steering, speed-sensitive response; rear wheels steer nahi karte. Original interior wheel mile to usse sync kiya jata hai (is GLB me alag steering mesh nahi hai, isliye duplicate primitive nahi banaya gaya).
+- **Steering:** true angular circular wheel (clockwise = right, counter-clockwise = left), 200° configurable range, single-touch rim drag, smooth self-centring, Ackermann front steering; rear wheels steer nahi karte. Original interior wheel mile to usse sync kiya jata hai (is GLB me alag steering mesh nahi hai, isliye duplicate primitive nahi banaya gaya).
 - **Pedals:** alag accelerator aur brake, hold-to-drive, smooth press/release animation. Dono dabane par brake physics priority leti hai aur driven wheels ko burnout ke liye spin hone deti hai.
 - **Drift/burnout:** real lateral/longitudinal slip se; pooled skid marks aur contact-point smoke sirf tab jab tyres actually slide karein. Handbrake rear grip kam karta hai.
 - **Audio:** procedurally generated RPM-driven engine/load/turbo layers, wheelspin, squeal, wind, gear shift, horn, start/stop, impact aur loading ambience. Koi copyrighted BMW recording nahi.
-- **Speedometer:** actual player Rigidbody velocity se digital km/h + needle; input se fake nahi.
+- **Speedometer:** purana PNG hata diya gaya; naya runtime circular gauge + needle + digital km/h sirf actual player Rigidbody velocity se. Input se fake nahi.
 - **Cameras:** 3 modes — close chase, far chase, driver-seat interior. Smooth blend, configurable offsets/FOV.
 - **Loading:** real `ResourceRequest`/setup-stage progress, smooth bar, tips aur loading audio. Timer se fake percentage nahi.
 - **Showroom:** fixed-centre, frame-rate-independent 360° car rotation aur studio lighting.
-- **Graphics:** procedural realistic skybox, sun/ambient/fog, soft shadows, reflection probe, PBR/glass/emissive material tuning, headlights aur brake-responsive taillights.
+- **Graphics:** realistic layered 3D clouds + procedural sky, single warm sun (shadow strength 0.88, 2 cascades, 85 m distance), skybox ambient/reflections, subtle fog, real car/building shadows + subtle contact patch, PBR/glass/emissive tuning, headlights aur brake-responsive taillights.
 - **City:** roads, pavements, ramps aur terrain par proper colliders; decorative meshes ko colliders nahi milte.
 
 ## Controls
