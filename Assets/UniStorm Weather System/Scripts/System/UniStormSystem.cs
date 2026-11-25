@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -682,7 +682,8 @@ namespace UniStorm
             TimeOfDayMusicAudioSource = TempAudioSourceMusic.GetComponent<AudioSource>();
             TimeOfDayMusicAudioSource.outputAudioMixerGroup = UniStormAudioMixer.FindMatchingGroups("Master/Music")[0];
 
-            UniStormWindZone = GameObject.Find("UniStorm Windzone").GetComponent<WindZone>();
+            GameObject windZoneObject = GameObject.Find("UniStorm Windzone");
+            if (windZoneObject != null) UniStormWindZone = windZoneObject.GetComponent<WindZone>();
             m_StarsRenderer = GameObject.Find("UniStorm Stars").GetComponent<Renderer>();
             m_StarsMaterial = m_StarsRenderer.material;
             m_StarsMaterial.SetFloat("_StarSpeed", StarSpeed);
