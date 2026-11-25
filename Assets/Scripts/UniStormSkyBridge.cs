@@ -85,7 +85,7 @@ namespace CityDrive
 
             if (sun == null) yield break;
             sun.shadows = LightShadows.Soft;
-            sun.shadowResolution = LightShadowResolution.Medium;
+            sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.Medium;
             sun.shadowStrength = 0.86f;
             sun.shadowBias = 0.02f;
             sun.shadowNormalBias = 0.02f;
