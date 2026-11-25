@@ -113,7 +113,7 @@ namespace CityDrive
             if (material != null)
             {
                 material.color = new Color(0.23f, 0.25f, 0.27f);
-                material.metallic = 0.05f;
+                material.SetFloat("_Metallic", 0.05f);
                 material.SetFloat("_Glossiness", 0.35f);
                 ground.GetComponent<Renderer>().material = material;
             }
