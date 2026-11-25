@@ -20,7 +20,7 @@ namespace CityDrive
         {
             Application.targetFrameRate = 60;
             QualitySettings.vSyncCount = 0;
-            QualitySettings.shadowDistance = 110f;
+            QualitySettings.shadowDistance = 85f; // PDF guidance: 60–90 units on mobile
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Physics.defaultContactOffset = 0.015f;
             Physics.bounceThreshold = 4f;
@@ -58,6 +58,11 @@ namespace CityDrive
             GameObject car = SpawnCar(spawn, spawnRotation, carPrefab);
             ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
             controller.enabled = false;
+
+            // Separate true 3D cloud geometry; skybox remains only the backdrop.
+            GameObject cloudHost = new GameObject("3D Cloud Layer");
+            CloudSky clouds = cloudHost.AddComponent<CloudSky>();
+            clouds.SetTarget(car.transform);
 
             Camera cameraComponent = Camera.main;
             if (cameraComponent == null)
@@ -120,33 +125,56 @@ namespace CityDrive
         }
 
         /// <summary>
-        /// Procedural daytime sky, coherent sun/ambient/fog and one reflection probe.
-        /// Uses only built-in shaders, so no paid HDRI needs to be downloaded.
+        /// Applies the PDF environment rules: keep an imported AllSky/daytime skybox
+        /// if one is already assigned, otherwise use the built-in realistic fallback.
+        /// Ambient/reflections come from the skybox, fog is subtle and distant,
+        /// shadows are soft with mobile-friendly resolution.
         /// </summary>
         private static void SetupEnvironment()
         {
-            Shader skyShader = Shader.Find("Skybox/Procedural");
-            if (skyShader != null)
+            Material sky = RenderSettings.skybox;
+            bool skyValid = sky != null && sky.shader != null && sky.shader.isSupported &&
+                            !sky.shader.name.Contains("URP") && !sky.shader.name.Contains("HDRP");
+
+            if (!skyValid)
             {
-                Material sky = new Material(skyShader) { name = "City Drive Day Sky" };
-                sky.SetFloat("_SunSize", 0.028f);
-                sky.SetFloat("_SunSizeConvergence", 6f);
-                sky.SetFloat("_AtmosphereThickness", 1.05f);
-                sky.SetColor("_SkyTint", new Color(0.48f, 0.63f, 0.86f));
-                sky.SetColor("_GroundColor", new Color(0.42f, 0.40f, 0.38f));
-                sky.SetFloat("_Exposure", 1.12f);
-                RenderSettings.skybox = sky;
+                Shader skyShader = Shader.Find("CityDrive/Realistic Sky") ?? Shader.Find("Skybox/Procedural");
+                if (skyShader != null)
+                {
+                    sky = new Material(skyShader) { name = "City Drive Realistic Sky" };
+                    if (sky.HasProperty("_Tint")) sky.SetColor("_Tint", new Color(0.36f, 0.52f, 0.78f));
+                    if (sky.HasProperty("_Horizon")) sky.SetColor("_Horizon", new Color(0.74f, 0.82f, 0.90f));
+                    if (sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", 1f);
+                    RenderSettings.skybox = sky;
+                    skyValid = true;
+                }
+            }
+            else
+            {
+                // PDF: do not replace the supplied shader/texture; start neutral at 0° rotation.
+                if (sky.HasProperty("_Rotation")) sky.SetFloat("_Rotation", 0f);
+                if (sky.HasProperty("_Exposure") && sky.GetFloat("_Exposure") <= 0.01f)
+                    sky.SetFloat("_Exposure", 1f);
             }
 
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.58f, 0.66f, 0.78f);
-            RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.48f);
-            RenderSettings.ambientGroundColor = new Color(0.22f, 0.21f, 0.20f);
+            if (skyValid)
+            {
+                RenderSettings.ambientMode = AmbientMode.Skybox;
+                RenderSettings.defaultReflectionMode = DefaultReflectionMode.Skybox;
+            }
+            else
+            {
+                RenderSettings.ambientMode = AmbientMode.Trilight;
+                RenderSettings.ambientSkyColor = new Color(0.58f, 0.66f, 0.78f);
+                RenderSettings.ambientEquatorColor = new Color(0.40f, 0.43f, 0.48f);
+                RenderSettings.ambientGroundColor = new Color(0.22f, 0.21f, 0.20f);
+            }
+
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 300f;
-            RenderSettings.fogEndDistance = 1000f;
-            RenderSettings.fogColor = new Color(0.60f, 0.70f, 0.83f);
+            RenderSettings.fogStartDistance = 220f;
+            RenderSettings.fogEndDistance = 700f;
+            RenderSettings.fogColor = new Color(0.68f, 0.76f, 0.86f);
 
             Light sun = null;
             foreach (Light light in Object.FindObjectsOfType<Light>())
@@ -160,12 +188,12 @@ namespace CityDrive
                 sun = sunObject.GetComponent<Light>();
                 sun.type = LightType.Directional;
             }
-            sun.color = new Color(1f, 0.95f, 0.86f);
-            sun.intensity = 1.45f;
+            sun.color = new Color(1f, 0.96f, 0.90f);
+            sun.intensity = 1.15f;
             sun.shadows = LightShadows.Soft;
-            sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.High;
-            sun.shadowBias = 0.035f;
-            sun.shadowNormalBias = 0.035f;
+            sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.Medium;
+            sun.shadowBias = 0.02f;
+            sun.shadowNormalBias = 0.02f;
             RenderSettings.sun = sun;
 
             if (Object.FindObjectOfType<ReflectionProbe>() == null)

@@ -38,8 +38,8 @@ public static class ProjectSetup
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
 
-        QualitySettings.shadowDistance = 110f;
-        QualitySettings.shadowResolution = ShadowResolution.High;
+        QualitySettings.shadowDistance = 85f; // PDF mobile guidance: 60–90 units
+        QualitySettings.shadowResolution = ShadowResolution.Medium;
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.vSyncCount = 0;
         QualitySettings.antiAliasing = 0;
@@ -50,31 +50,106 @@ public static class ProjectSetup
         EnsureSkybox();
     }
 
-    /// <summary>Creates one realistic procedural HDR-style sky material (no paid HDRI needed).</summary>
+    /// <summary>
+    /// PDF workflow: if the AllSky Free pack is imported, pick its natural daytime
+    /// sky material by inspecting the real imported assets (no guessed name), keep
+    /// its shader/texture untouched, and assign it to the scene. Otherwise fall
+    /// back to the built-in realistic sky shader shipped with this project.
+    /// </summary>
     private static void EnsureSkybox()
     {
-        Shader shader = Shader.Find("Skybox/Procedural");
-        if (shader == null) return;
+        Material sky = FindDaytimeSkyMaterial();
+        bool fromAssetPack = sky != null;
 
-        const string directory = "Assets/Skybox";
-        const string path = directory + "/CityDriveSky.mat";
-        if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-
-        Material sky = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (sky == null)
+        if (!fromAssetPack)
         {
-            sky = new Material(shader) { name = "CityDriveSky" };
-            AssetDatabase.CreateAsset(sky, path);
+            Shader shader = Shader.Find("CityDrive/Realistic Sky") ?? Shader.Find("Skybox/Procedural");
+            if (shader == null) return;
+
+            const string directory = "Assets/Skybox";
+            const string path = directory + "/CityDriveSky.mat";
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+
+            sky = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (sky == null)
+            {
+                sky = new Material(shader) { name = "CityDriveSky" };
+                AssetDatabase.CreateAsset(sky, path);
+            }
+            if (sky.HasProperty("_Tint")) sky.SetColor("_Tint", new Color(0.36f, 0.52f, 0.78f));
+            if (sky.HasProperty("_SkyTint")) sky.SetColor("_SkyTint", new Color(0.36f, 0.52f, 0.78f));
+            if (sky.HasProperty("_Horizon")) sky.SetColor("_Horizon", new Color(0.74f, 0.82f, 0.90f));
+            if (sky.HasProperty("_GroundColor")) sky.SetColor("_GroundColor", new Color(0.38f, 0.39f, 0.40f));
+            if (sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", 1f);
+            EditorUtility.SetDirty(sky);
         }
-        sky.SetFloat("_SunSize", 0.028f);
-        sky.SetFloat("_SunSizeConvergence", 6f);
-        sky.SetFloat("_AtmosphereThickness", 1.05f);
-        sky.SetColor("_SkyTint", new Color(0.48f, 0.63f, 0.86f));
-        sky.SetColor("_GroundColor", new Color(0.42f, 0.40f, 0.38f));
-        sky.SetFloat("_Exposure", 1.12f);
-        EditorUtility.SetDirty(sky);
+        else
+        {
+            // PDF starting values: neutral tint, zero rotation, exposure 1 where exposed.
+            if (sky.HasProperty("_Rotation")) sky.SetFloat("_Rotation", 0f);
+            if (sky.HasProperty("_Exposure")) sky.SetFloat("_Exposure", 1f);
+            if (sky.HasProperty("_Tint")) sky.SetColor("_Tint", Color.white);
+        }
+
         RenderSettings.skybox = sky;
+        RenderSettings.ambientMode = AmbientMode.Skybox;
+        RenderSettings.defaultReflectionMode = DefaultReflectionMode.Skybox;
         AssetDatabase.SaveAssets();
+
+        UnityEngine.SceneManagement.Scene scene = EditorSceneManager.GetActiveScene();
+        if (scene.IsValid() && scene.isLoaded && !string.IsNullOrEmpty(scene.path))
+        {
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+        }
+
+        Debug.Log(fromAssetPack
+            ? "[CityDrive] Using imported daytime sky material: " + sky.name
+            : "[CityDrive] AllSky material not found; using built-in realistic sky fallback.");
+    }
+
+    [MenuItem("CityDrive/Reapply Sky and Environment")]
+    public static void ReapplySky()
+    {
+        EnsureSkybox();
+    }
+
+    /// <summary>Scores imported materials instead of guessing an AllSky material name.</summary>
+    private static Material FindDaytimeSkyMaterial()
+    {
+        string[] guids = AssetDatabase.FindAssets("t:Material");
+        Material best = null;
+        float bestScore = float.MaxValue;
+
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/")) continue;
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null || material.shader == null || !material.shader.isSupported) continue;
+
+            string identity = (material.name + " " + path + " " + material.shader.name).ToLowerInvariant();
+            bool skyLike = identity.Contains("sky") || material.shader.name.Contains("Skybox");
+            if (!skyLike) continue;
+            if (identity.Contains("urp") || identity.Contains("hdrp")) continue;
+
+            float score = 0f;
+            if (identity.Contains("allsky")) score -= 40f;
+            if (identity.Contains("day") || identity.Contains("blue") ||
+                identity.Contains("sunny") || identity.Contains("clear")) score -= 20f;
+            if (identity.Contains("night") || identity.Contains("sunset") ||
+                identity.Contains("space") || identity.Contains("cartoon") ||
+                identity.Contains("stylized") || identity.Contains("pink") ||
+                identity.Contains("dawn") || identity.Contains("dusk")) score += 90f;
+
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = material;
+            }
+        }
+
+        return bestScore < 50f ? best : null;
     }
 
     /// <summary>
@@ -123,18 +198,21 @@ public static class ProjectSetup
             sunObject.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
             Light sun = sunObject.GetComponent<Light>();
             sun.type = LightType.Directional;
-            sun.intensity = 1.25f;
+            sun.color = new Color(1f, 0.96f, 0.90f);
+            sun.intensity = 1.15f;
             sun.shadows = LightShadows.Soft;
+            sun.shadowResolution = UnityEngine.Rendering.LightShadowResolution.Medium;
+            sun.shadowBias = 0.02f;
+            sun.shadowNormalBias = 0.02f;
 
             new GameObject("GameManager", typeof(GameBootstrap));
 
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.52f, 0.58f, 0.68f);
+            RenderSettings.ambientMode = AmbientMode.Skybox;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 250f;
-            RenderSettings.fogEndDistance = 900f;
-            RenderSettings.fogColor = new Color(0.62f, 0.70f, 0.80f);
+            RenderSettings.fogStartDistance = 220f;
+            RenderSettings.fogEndDistance = 700f;
+            RenderSettings.fogColor = new Color(0.68f, 0.76f, 0.86f);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
         }

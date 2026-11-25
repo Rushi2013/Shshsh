@@ -40,6 +40,20 @@ Because external packs could not be downloaded or license-verified end-to-end he
 - `GameBootstrap.cs` — async asset loading with real progress, PBR/glass/emissive material upgrades, sky/sun/fog/reflection probe, system wiring.
 - `ProjectSetup.cs` — Android/quality settings and procedural skybox asset for CI builds.
 
+## Cloud-sky PDF pass (no APK built)
+
+The supplied `Realistic_Clouds_Unity_A_to_Z_Guide(1).pdf` was read in full. Its key rules were applied:
+
+- Confirmed Built-in Render Pipeline; no URP/HDRP cloud shader was imported.
+- Kept the imported AllSky/daytime skybox if present; added an editor-side material scanner instead of guessing a material name. `CityDrive → Reapply Sky and Environment` re-runs detection after importing the asset pack.
+- Built-in fallback: `Assets/Shaders/RealisticSky.shader` (atmospheric gradient, soft sun, restrained high cloud veil).
+- Separate true 3D cloud layer: `Assets/Scripts/CloudSky.cs` + `Assets/Shaders/SoftCloud.shader`, with high/mid/near groups, slow independent drift, soft noise edges, no shadows/tessellation and combined meshes for low draw calls.
+- Environment lighting/reflections from skybox, neutral exposure/rotation, subtle distant fog, warm directional sun, soft shadows at mobile-friendly resolution/distance.
+- No vehicle physics, controls, audio or gameplay UI changed in this pass.
+- Backup tag before this pass: `pre-cloud-overhaul-backup`.
+
+The AllSky asset pack itself is not present in the sandbox workspace. The code auto-detects it once imported into the Unity project; no password was requested or used.
+
 ## Verification limits
 
 No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.
