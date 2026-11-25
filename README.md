@@ -2,15 +2,15 @@
 
 Ek **real Unity 3D** project hai (HTML/JS nahi). Ismein aapki supplied city GLB aur BMW 330i-inspired sedan GLB, physics-driven car controller, circular touch steering, burnout/drift effects, layered car audio aur mobile HUD hai.
 
-## Latest APK — city-drive-26
+## Latest APK — city-drive-40
 
 **Fast raw download (repo-hosted):** https://raw.githubusercontent.com/Rushi2013/Shshsh/arena/411eaf4f-shshsh/apk/CityDrive.apk
 
-**Release download:** https://github.com/Rushi2013/Shshsh/releases/download/city-drive-26/CityDrive.apk
+**Release download:** https://github.com/Rushi2013/Shshsh/releases/download/city-drive-40/CityDrive.apk
 
-**Verified CI build:** https://github.com/Rushi2013/Shshsh/actions/runs/45563875786 ✅
+**Verified CI build:** https://github.com/Rushi2013/Shshsh/actions/runs/45659817412 ✅
 
-SHA-256: `4d93511172e875606ac9c7d4e954725da7700217b1aac11d931cb34796a2e2b9`
+SHA-256: `8c6c3ee546b9e903a2b4cc47d0a7117ea60f804f71a914d5b2defaafbb7ece58`
 
 Phone par APK download karke install karein (unknown apps allow karna pad sakta hai).
 
@@ -25,7 +25,7 @@ Phone par APK download karke install karein (unknown apps allow karna pad sakta 
 - **Cameras:** 3 modes — close chase, far chase, driver-seat interior. Smooth blend, configurable offsets/FOV.
 - **Loading:** real `ResourceRequest`/setup-stage progress, smooth bar, tips aur loading audio. Timer se fake percentage nahi.
 - **Showroom:** fixed-centre, frame-rate-independent 360° car rotation aur studio lighting.
-- **Graphics:** realistic layered 3D clouds + procedural sky, single warm sun (shadow strength 0.88, 2 cascades, 85 m distance), skybox ambient/reflections, subtle fog, real car/building shadows + subtle contact patch, PBR/glass/emissive tuning, headlights aur brake-responsive taillights.
+- **Graphics:** imported UniStorm volumetric clouds + realistic sky (procedural fallback), single warm sun (shadow strength 0.88, 2 cascades, 85 m distance), skybox ambient/reflections, subtle fog, real car/building shadows + subtle contact patch, PBR/glass/emissive tuning, headlights aur brake-responsive taillights.
 - **City:** roads, pavements, ramps aur terrain par proper colliders; decorative meshes ko colliders nahi milte.
 
 ## Controls
