@@ -3,9 +3,10 @@ using UnityEngine;
 namespace CityDrive
 {
     /// <summary>
-    /// Physics-driven drift/burnout effects. Smoke emission and skid marks are
-    /// produced only from the controller's real per-wheel slip and contact points.
-    /// Marks and particles are pooled; no effect is triggered by a UI button alone.
+    /// Realistic tyre smoke + skid marks, driven strictly by the controller's real
+    /// per-wheel contact and slip data. No button triggers an effect by itself.
+    /// Old blocky/radial smoke was removed: soft noise-textured particles with
+    /// depth fade, slow rise, expansion and gentle drift now come from each wheel.
     /// </summary>
     public sealed class VehicleEffects : MonoBehaviour
     {
@@ -16,13 +17,14 @@ namespace CityDrive
         [SerializeField] private float markLife = 22f;
         [SerializeField] private float markSpacing = 0.55f;
         [SerializeField] private float markWidth = 0.20f;
-        [SerializeField] private float slipThreshold = 0.18f;
+        [SerializeField] private float slipThreshold = 0.15f;
 
-        [Header("Smoke")]
-        [SerializeField] private int smokePerWheel = 22;
-        [SerializeField] private float smokeStartSize = 0.28f;
-        [SerializeField] private float smokeEndSize = 1.05f;
-        [SerializeField] private float smokeLifetime = 1.25f;
+        [Header("Realistic smoke")]
+        [SerializeField] private int smokePerWheel = 120;
+        [SerializeField] private float smokeLifetime = 3.4f;
+        [SerializeField] private float smokeStartSizeMin = 0.28f;
+        [SerializeField] private float smokeStartSizeMax = 0.68f;
+        [SerializeField] private float emissionMax = 55f;
 
         private sealed class Mark
         {
@@ -36,6 +38,7 @@ namespace CityDrive
 
         private readonly Mark[] _marks = new Mark[220];
         private readonly ParticleSystem[] _smoke = new ParticleSystem[4];
+        private readonly float[] _smokeIntensity = new float[4];
         private readonly Vector3[] _lastMarkPoint = new Vector3[4];
         private readonly float[] _lastMarkTime = new float[4];
         private readonly bool[] _hasLastPoint = new bool[4];
@@ -59,15 +62,8 @@ namespace CityDrive
                 new Vector3(-0.5f, 0f, -0.5f), new Vector3(0.5f, 0f, -0.5f),
                 new Vector3(0.5f, 0f, 0.5f), new Vector3(-0.5f, 0f, 0.5f)
             };
-            _quad.normals = new[]
-            {
-                Vector3.up, Vector3.up, Vector3.up, Vector3.up
-            };
-            _quad.uv = new[]
-            {
-                new Vector2(0f, 0f), new Vector2(1f, 0f),
-                new Vector2(1f, 1f), new Vector2(0f, 1f)
-            };
+            _quad.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+            _quad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f) };
             _quad.triangles = new[] { 0, 2, 1, 0, 3, 2 };
             _quad.RecalculateBounds();
 
@@ -75,16 +71,19 @@ namespace CityDrive
             if (markShader == null) markShader = Shader.Find("Sprites/Default");
             if (markShader != null)
             {
-                _markMaterial = new Material(markShader) { name = "Skid Mark" };
-                _markMaterial.renderQueue = 3000;
+                _markMaterial = new Material(markShader) { name = "Dark Skid Mark" };
+                _markMaterial.renderQueue = 2990;
             }
 
-            Shader smokeShader = Shader.Find("Particles/Standard Unlit");
-            if (smokeShader == null) smokeShader = Shader.Find("Particles/Alpha Blended");
+            Shader smokeShader = Shader.Find("CityDrive/Tire Smoke");
+            if (smokeShader == null || !smokeShader.isSupported)
+                smokeShader = Shader.Find("Particles/Standard Unlit");
             if (smokeShader != null)
             {
-                _smokeMaterial = new Material(smokeShader) { name = "Tyre Smoke" };
-                _smokeMaterial.mainTexture = CreateSmokeTexture();
+                _smokeMaterial = new Material(smokeShader) { name = "Realistic Tyre Smoke" };
+                _smokeMaterial.mainTexture = CreateSoftSmokeTexture();
+                _smokeMaterial.SetColor("_Color", new Color(0.94f, 0.95f, 0.97f, 0.42f));
+                _smokeMaterial.SetFloat("_Softness", 1.2f);
                 _smokeMaterial.renderQueue = 3010;
             }
 
@@ -100,21 +99,17 @@ namespace CityDrive
                 renderer.sharedMaterial = _markMaterial;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
-                _marks[i] = new Mark
-                {
-                    Object = go,
-                    Renderer = renderer,
-                    Block = new MaterialPropertyBlock()
-                };
+                _marks[i] = new Mark { Object = go, Renderer = renderer, Block = new MaterialPropertyBlock() };
             }
         }
 
-        private static Texture2D CreateSmokeTexture()
+        /// <summary>Soft noisy alpha texture: no square edges, no cartoon cloud discs.</summary>
+        private static Texture2D CreateSoftSmokeTexture()
         {
-            const int size = 64;
+            const int size = 256;
             Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
-                name = "Soft Smoke",
+                name = "Soft Tyre Smoke",
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Bilinear
             };
@@ -126,8 +121,12 @@ namespace CityDrive
                     float dx = (x + 0.5f) / size * 2f - 1f;
                     float dy = (y + 0.5f) / size * 2f - 1f;
                     float d = Mathf.Clamp01(Mathf.Sqrt(dx * dx + dy * dy));
-                    float alpha = Mathf.Pow(1f - d, 2.2f) * 0.65f;
-                    pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+                    float radial = 1f - Mathf.SmoothStep(0.18f, 1f, d);
+                    float broad = Mathf.PerlinNoise(x * 0.024f + 13.7f, y * 0.024f + 4.2f);
+                    float detail = Mathf.PerlinNoise(x * 0.075f + 2.3f, y * 0.075f + 19.1f);
+                    float noise = Mathf.Clamp01(broad * 0.68f + detail * 0.32f);
+                    float alpha = radial * Mathf.Lerp(0.35f, 1f, noise) * Mathf.Pow(radial, 0.45f);
+                    pixels[y * size + x] = new Color(0.95f, 0.96f, 0.98f, alpha * 0.88f);
                 }
             }
             texture.SetPixels(pixels);
@@ -137,6 +136,17 @@ namespace CityDrive
 
         private void BuildSmoke()
         {
+            AnimationCurve grow = new AnimationCurve(
+                new Keyframe(0f, 0.65f), new Keyframe(0.45f, 1.25f), new Keyframe(1f, 1.95f));
+            Gradient fade = new Gradient();
+            fade.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(0.80f, 0.82f, 0.85f), 0f),
+                    new GradientColorKey(new Color(0.56f, 0.58f, 0.62f), 1f)
+                },
+                new[] { new GradientAlphaKey(0.40f, 0f), new GradientAlphaKey(0.16f, 0.45f), new GradientAlphaKey(0f, 1f) });
+
             for (int i = 0; i < 4; i++)
             {
                 GameObject go = new GameObject("Tyre Smoke " + i);
@@ -145,35 +155,53 @@ namespace CityDrive
 
                 ParticleSystem.MainModule main = ps.main;
                 main.simulationSpace = ParticleSystemSimulationSpace.World;
-                main.startLifetime = smokeLifetime;
-                main.startSpeed = new ParticleSystem.MinMaxCurve(0.25f, 0.75f);
-                main.startSize = new ParticleSystem.MinMaxCurve(smokeStartSize, smokeEndSize);
-                main.startColor = new Color(0.78f, 0.80f, 0.83f, 0.4f);
-                main.maxParticles = smokePerWheel;
-                main.gravityModifier = -0.04f;
+                main.duration = 3f;
                 main.loop = true;
                 main.playOnAwake = true;
+                main.startLifetime = new ParticleSystem.MinMaxCurve(smokeLifetime * 0.7f, smokeLifetime * 1.25f);
+                main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 1.0f);
+                main.startSize = new ParticleSystem.MinMaxCurve(smokeStartSizeMin, smokeStartSizeMax);
+                main.startColor = new Color(0.88f, 0.89f, 0.91f, 0.30f);
+                main.gravityModifier = -0.12f;
+                main.maxParticles = smokePerWheel;
 
                 ParticleSystem.EmissionModule emission = ps.emission;
                 emission.rateOverTime = 0f;
 
                 ParticleSystem.ShapeModule shape = ps.shape;
-                shape.shapeType = ParticleSystemShapeType.Sphere;
-                shape.radius = 0.16f;
+                shape.shapeType = ParticleSystemShapeType.Cone;
+                shape.angle = 18f;
+                shape.radius = 0.14f;
+
+                ParticleSystem.VelocityOverLifetimeModule velocity = ps.velocityOverLifetime;
+                velocity.enabled = true;
+                velocity.space = ParticleSystemSimulationSpace.Local;
+                velocity.x = new ParticleSystem.MinMaxCurve(-0.18f, 0.18f);
+                velocity.y = new ParticleSystem.MinMaxCurve(0.35f, 0.85f);
+                velocity.z = new ParticleSystem.MinMaxCurve(-0.85f, -0.25f); // trails behind the car
+
+                ParticleSystem.SizeOverLifetimeModule size = ps.sizeOverLifetime;
+                size.enabled = true;
+                size.size = new ParticleSystem.MinMaxCurve(1f, grow);
 
                 ParticleSystem.ColorOverLifetimeModule color = ps.colorOverLifetime;
                 color.enabled = true;
-                Gradient gradient = new Gradient();
-                gradient.SetKeys(
-                    new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.55f, 0.57f, 0.60f), 1f) },
-                    new[] { new GradientAlphaKey(0.35f, 0f), new GradientAlphaKey(0f, 1f) });
-                color.color = gradient;
+                color.color = fade;
+
+                ParticleSystem.NoiseModule noise = ps.noise;
+                noise.enabled = true;
+                noise.strength = 0.34f;
+                noise.frequency = 0.18f;
+                noise.scrollSpeed = 0.12f;
+                noise.damping = true;
+                noise.quality = ParticleSystemNoiseQuality.Low;
 
                 ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
-                if (_smokeMaterial != null) renderer.sharedMaterial = _smokeMaterial;
+                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sharedMaterial = _smokeMaterial;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
-                renderer.renderMode = ParticleSystemRenderMode.Billboard;
+                renderer.sortingFudge = -10f;
                 ps.Play();
                 _smoke[i] = ps;
             }
@@ -183,30 +211,41 @@ namespace CityDrive
         {
             if (Car == null || Car.Wheels == null) return;
             WheelTelemetry[] wheels = Car.Wheels;
+            float dt = Mathf.Min(0.1f, Time.unscaledDeltaTime);
 
             for (int i = 0; i < 4; i++)
             {
                 WheelTelemetry wheel = wheels[i];
-                float intensity = wheel.Grounded ? Mathf.Clamp01((wheel.TotalSlip - slipThreshold) / 0.55f) : 0f;
+                float raw = 0f;
+                if (wheel.Grounded)
+                {
+                    // Physics only: slip ratio, lateral slip and real wheelspin.
+                    raw = Mathf.Clamp01((wheel.TotalSlip - slipThreshold) / 0.52f);
+                    if (wheel.BurnoutSlip > 0.05f)
+                        raw = Mathf.Max(raw, Mathf.Clamp01(wheel.BurnoutSlip / 0.48f));
+                }
+
+                float follow = raw > _smokeIntensity[i] ? 5f : 1.6f;
+                _smokeIntensity[i] = Mathf.MoveTowards(_smokeIntensity[i], raw, dt * follow);
+                float intensity = _smokeIntensity[i];
+
                 ParticleSystem ps = _smoke[i];
                 if (ps != null)
                 {
-                    ps.transform.position = wheel.Grounded
-                        ? wheel.ContactPoint + wheel.ContactNormal * 0.12f
-                        : Car.transform.TransformPoint(Car.Wheels[i].ContactPoint);
+                    if (wheel.Grounded)
+                        ps.transform.SetPositionAndRotation(
+                            wheel.ContactPoint + wheel.ContactNormal * 0.09f, Car.transform.rotation);
                     ParticleSystem.EmissionModule emission = ps.emission;
-                    emission.rateOverTime = intensity * 20f;
+                    emission.rateOverTime = intensity > 0.02f ? intensity * emissionMax : 0f;
                     ParticleSystem.MainModule main = ps.main;
-                    main.startColor = new Color(0.76f, 0.78f, 0.81f,
-                        Mathf.Lerp(0.18f, 0.58f, intensity));
+                    main.startColor = new Color(0.88f, 0.89f, 0.91f, Mathf.Lerp(0.14f, 0.42f, intensity));
                 }
 
                 if (!wheel.Grounded || intensity <= 0.05f) continue;
 
                 bool moved = _hasLastPoint[i] &&
                              Vector3.Distance(wheel.ContactPoint, _lastMarkPoint[i]) >= markSpacing;
-                bool burnoutStationary = wheel.BurnoutSlip > 0.12f &&
-                                         Time.time - _lastMarkTime[i] > 0.12f;
+                bool burnoutStationary = wheel.BurnoutSlip > 0.12f && Time.time - _lastMarkTime[i] > 0.12f;
                 if (moved || !_hasLastPoint[i] || burnoutStationary)
                     SpawnMark(i, wheel, intensity, burnoutStationary);
             }
@@ -223,7 +262,7 @@ namespace CityDrive
                     continue;
                 }
                 float alpha = mark.Alpha * (1f - age / markLife);
-                mark.Block.SetColor("_Color", new Color(0.035f, 0.035f, 0.04f, alpha));
+                mark.Block.SetColor("_Color", new Color(0.028f, 0.028f, 0.032f, alpha));
                 mark.Renderer.SetPropertyBlock(mark.Block);
             }
         }
@@ -240,7 +279,7 @@ namespace CityDrive
                     break;
                 }
             }
-            if (index < 0) index = _cursor; // recycle the oldest slot when saturated
+            if (index < 0) index = _cursor;
             _cursor = (index + 1) % _marks.Length;
             Mark mark = _marks[index];
             if (mark == null) return;
@@ -255,10 +294,10 @@ namespace CityDrive
             mark.Object.transform.SetPositionAndRotation(
                 wheel.ContactPoint + wheel.ContactNormal * 0.018f, rotation);
             mark.Object.transform.localScale = new Vector3(markWidth, 1f, length);
-            mark.Alpha = burnout ? 0.92f : Mathf.Lerp(0.18f, 0.62f, intensity);
+            mark.Alpha = burnout ? 0.92f : Mathf.Lerp(0.16f, 0.62f, intensity);
             mark.Birth = Time.time;
             mark.Active = true;
-            mark.Block.SetColor("_Color", new Color(0.035f, 0.035f, 0.04f, mark.Alpha));
+            mark.Block.SetColor("_Color", new Color(0.028f, 0.028f, 0.032f, mark.Alpha));
             mark.Renderer.SetPropertyBlock(mark.Block);
             mark.Object.SetActive(true);
 

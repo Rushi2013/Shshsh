@@ -54,6 +54,20 @@ The supplied `Realistic_Clouds_Unity_A_to_Z_Guide(1).pdf` was read in full. Its 
 
 The AllSky asset pack itself is not present in the sandbox workspace. The code auto-detects it once imported into the Unity project; no password was requested or used.
 
+## Realistic tyre smoke pass (no APK built)
+
+The supplied `Realistic_Tire_Smoke_Drift_Burnout_Unity_Guide(1).pdf` was read in full. Applied:
+
+- Removed the old simple radial-texture smoke emitter entirely.
+- New `Assets/Shaders/TireSmoke.shader`: soft alpha, per-particle colour, built-in-pipeline compatible and soft-particle depth fade against road/buildings. Camera depth texture is enabled in `GameBootstrap`.
+- `VehicleEffects.cs`: one pooled emitter per wheel at the real contact point, soft noise texture, low-strength noise module, slow upward drift, trailing velocity, expanding size, alpha fade, 120 particles/wheel cap, no shadows.
+- Emission only from measured wheel contact/slip; normal grip, traction-limited acceleration and normal braking produce no smoke. Burnout smoke comes from driven spinning wheels; drift smoke from lateral slip; intensity is smoothed and fades when grip returns.
+- Skid marks remain pooled per-wheel strips spawned from real contact paths, darker for burnout.
+- `VehicleAudio.cs`: separate physics-driven wheelspin and brake-squeal layers added beside drift squeal and general tyre scrub; no button-only triggering.
+- No external paid smoke VFX was imported: the pack was not supplied, and the project is Built-in while several recommended packs are URP-only.
+
+Backup tag before this pass: `pre-smoke-overhaul-backup`.
+
 ## Verification limits
 
 No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.

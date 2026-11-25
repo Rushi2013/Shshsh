@@ -26,6 +26,8 @@ namespace CityDrive
         private AudioSource _turbo;
         private AudioSource _tyre;
         private AudioSource _squeal;
+        private AudioSource _wheelspin;
+        private AudioSource _brakeSqueal;
         private AudioSource _wind;
         private AudioSource _oneShot;
         private AudioLowPassFilter _engineFilter;
@@ -36,6 +38,8 @@ namespace CityDrive
         private float _perspective;
         private float _lastSlip;
         private float _lastSqueal;
+        private float _lastWheelspin;
+        private float _lastBrakeSlip;
         private float _boost;
 
         private void Start()
@@ -51,8 +55,10 @@ namespace CityDrive
             AudioClip engineLoop = ProceduralAudio.EngineLoop();
             AudioClip loadLoop = ProceduralAudio.LoadLoop();
             AudioClip turboLoop = ProceduralAudio.TurboLoop();
-            AudioClip tyreLoop = ProceduralAudio.NoiseLoop("Wheelspin", 0.55f, 0.45f);
+            AudioClip tyreLoop = ProceduralAudio.NoiseLoop("Tyre Scrub", 0.55f, 0.42f);
             AudioClip squealLoop = ProceduralAudio.SquealLoop();
+            AudioClip wheelspinLoop = ProceduralAudio.WheelspinLoop();
+            AudioClip brakeLoop = ProceduralAudio.BrakeSquealLoop();
             AudioClip windLoop = ProceduralAudio.NoiseLoop("Road Wind", 0.35f, 0.75f);
 
             _engine = MakeLoop("Engine", engineLoop, engineVolume);
@@ -60,6 +66,8 @@ namespace CityDrive
             _turbo = MakeLoop("Turbo", turboLoop, turboVolume);
             _tyre = MakeLoop("Tyre Scrub", tyreLoop, tyreVolume);
             _squeal = MakeLoop("Tyre Squeal", squealLoop, tyreVolume * 0.75f);
+            _wheelspin = MakeLoop("Wheelspin", wheelspinLoop, tyreVolume * 0.85f);
+            _brakeSqueal = MakeLoop("Brake Squeal", brakeLoop, tyreVolume * 0.55f);
             _wind = MakeLoop("Road Noise", windLoop, 0.10f);
             _oneShot = gameObject.AddComponent<AudioSource>();
             _oneShot.playOnAwake = false;
@@ -107,6 +115,8 @@ namespace CityDrive
                 PlayLoop(_turbo);
                 PlayLoop(_tyre);
                 PlayLoop(_squeal);
+                PlayLoop(_wheelspin);
+                PlayLoop(_brakeSqueal);
                 PlayLoop(_wind);
                 PlayOneShot(ProceduralAudio.Startup(), 0.55f);
             }
@@ -124,7 +134,7 @@ namespace CityDrive
 
         private void StopAllLoops()
         {
-            AudioSource[] sources = { _engine, _load, _turbo, _tyre, _squeal, _wind };
+            AudioSource[] sources = { _engine, _load, _turbo, _tyre, _squeal, _wheelspin, _brakeSqueal, _wind };
             foreach (AudioSource source in sources)
             {
                 if (source != null) source.Stop();
@@ -141,16 +151,26 @@ namespace CityDrive
             float load = Mathf.Clamp01(Car.EngineLoad);
             float slip = 0f;
             float lateral = 0f;
+            float wheelspin = 0f;
+            float brakeSlip = 0f;
             if (Car.Wheels != null)
             {
                 for (int i = 0; i < 4; i++)
                 {
-                    slip = Mathf.Max(slip, Car.Wheels[i].TotalSlip);
-                    lateral = Mathf.Max(lateral, Mathf.Abs(Car.Wheels[i].LateralSlip));
+                    WheelTelemetry wheel = Car.Wheels[i];
+                    slip = Mathf.Max(slip, wheel.TotalSlip);
+                    lateral = Mathf.Max(lateral, Mathf.Abs(wheel.LateralSlip));
+                    if (wheel.Grounded && wheel.Driven)
+                        wheelspin = Mathf.Max(wheelspin,
+                            Mathf.Max(wheel.BurnoutSlip, Mathf.Max(0f, wheel.SlipRatio)));
+                    if (wheel.Grounded && Car.BrakeInput > 0.1f)
+                        brakeSlip = Mathf.Max(brakeSlip, Mathf.Abs(wheel.SlipRatio));
                 }
             }
             _lastSlip = Mathf.Lerp(_lastSlip, slip, dt * 5f);
             _lastSqueal = Mathf.Lerp(_lastSqueal, lateral, dt * 6f);
+            _lastWheelspin = Mathf.Lerp(_lastWheelspin, wheelspin, dt * 6f);
+            _lastBrakeSlip = Mathf.Lerp(_lastBrakeSlip, brakeSlip, dt * 5f);
 
             float burnoutBoost = Car.IsBurnout ? 0.3f : 0f;
             float loadTarget = Mathf.Clamp01(load + burnoutBoost + rpmNorm * 0.25f);
@@ -162,10 +182,17 @@ namespace CityDrive
             _load.volume = masterVolume * loadVolume * _boost;
             _turbo.pitch = Mathf.Lerp(0.75f, 2.2f, rpmNorm * 0.6f + _boost * 0.4f);
             _turbo.volume = masterVolume * turboVolume * Mathf.Clamp01(_boost * (0.3f + rpmNorm));
-            _tyre.volume = masterVolume * tyreVolume * Mathf.Clamp01(_lastSlip * (Car.IsBurnout ? 1.4f : 0.9f));
+            _tyre.volume = masterVolume * tyreVolume * Mathf.Clamp01((_lastSlip - 0.12f) * 1.1f);
             _tyre.pitch = Mathf.Lerp(0.8f, 1.35f, speedNorm);
             _squeal.volume = masterVolume * tyreVolume * Mathf.Clamp01((_lastSqueal - 0.12f) * 1.6f);
             _squeal.pitch = Mathf.Lerp(1.05f, 1.55f, Mathf.Clamp01(_lastSqueal));
+            _wheelspin.volume = masterVolume * tyreVolume * 0.85f *
+                                Mathf.Clamp01((_lastWheelspin - 0.10f) * 1.5f);
+            _wheelspin.pitch = Mathf.Lerp(0.72f, 1.25f, Mathf.Clamp01(_lastWheelspin));
+            _brakeSqueal.volume = masterVolume * tyreVolume * 0.55f *
+                                  Mathf.Clamp01((_lastBrakeSlip - 0.18f) * 1.4f) *
+                                  Mathf.Clamp01(Car.BrakeInput);
+            _brakeSqueal.pitch = Mathf.Lerp(1.15f, 1.75f, speedNorm);
             _wind.volume = masterVolume * 0.10f * speedNorm;
             _wind.pitch = Mathf.Lerp(0.8f, 1.6f, speedNorm);
 
@@ -248,6 +275,25 @@ namespace CityDrive
             {
                 float p = 2f * Mathf.PI * 900f * t;
                 return 0.18f * Mathf.Sin(p) + 0.12f * Mathf.Sin(p * 1.31f) + Noise(i) * 0.09f;
+            });
+        }
+
+        public static AudioClip WheelspinLoop()
+        {
+            return Clip("Wheelspin", 0.5f, (t, i) =>
+            {
+                float rumble = Mathf.Sin(2f * Mathf.PI * 72f * t) * 0.16f;
+                float grind = Mathf.Sin(2f * Mathf.PI * 310f * t) * 0.05f;
+                return rumble + grind + Noise(i) * 0.24f;
+            });
+        }
+
+        public static AudioClip BrakeSquealLoop()
+        {
+            return Clip("Brake Squeal", 0.4f, (t, i) =>
+            {
+                float p = 2f * Mathf.PI * 1450f * t;
+                return Mathf.Sin(p) * 0.12f + Mathf.Sin(p * 1.07f) * 0.07f + Noise(i) * 0.05f;
             });
         }
 

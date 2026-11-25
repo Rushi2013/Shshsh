@@ -72,6 +72,7 @@ namespace CityDrive
                 cameraComponent = cameraObject.GetComponent<Camera>();
             }
             cameraComponent.clearFlags = CameraClearFlags.Skybox;
+            cameraComponent.depthTextureMode |= DepthTextureMode.Depth; // soft tyre smoke fade
             cameraComponent.allowHDR = true;
             cameraComponent.fieldOfView = 64f;
             cameraComponent.farClipPlane = 1200f;
