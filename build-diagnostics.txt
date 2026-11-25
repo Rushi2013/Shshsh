@@ -1,0 +1,18 @@
+Unity build diagnostics for run 45658169526
+Searching all Unity/editor log locations...
+===== /home/runner/.config/unity3d/Unity/Unity.Licensing.Client.log (32192 bytes) =====
+2026-11-25 16:51:58.398 - [   167] - [    12] - ERROR - [Unity.Licensing.Client.Communication.Controllers.UpdateLicenseController] ulf update failed. Details: No ULF license found.
+2026-11-25 16:51:58.398 - [   167] - [    12] - ERROR - [Unity.Licensing.Client.Communication.Controllers.UpdateLicenseController] assigned update failed. Details: Token not found in cache
+System.Net.Sockets.SocketException (104): Connection reset by peer
+   at System.Net.Sockets.Socket.AwaitableSocketAsyncEventArgs.ThrowException(SocketError error, CancellationToken cancellationToken)
+===== /home/runner/.config/unity3d/Unity/Unity.Entitlements.Audit.log (11322 bytes) =====
+===== unity3d config tree =====
+/home/runner/.config/unity3d/upm.log 2141
+/home/runner/.config/unity3d/Unity/licenses/packages/packageAccessControlList.etag 34
+/home/runner/.config/unity3d/Unity/licenses/packages/packageAccessControlList.xml 4057
+/home/runner/.config/unity3d/Unity/config/production.json 2107
+/home/runner/.config/unity3d/Unity/CoreBusinessMetrics.db-shm 32768
+/home/runner/.config/unity3d/Unity/CoreBusinessMetrics.db 20480
+/home/runner/.config/unity3d/Unity/CoreBusinessMetrics.db-wal 12392
+/home/runner/.config/unity3d/Unity/Unity.Licensing.Client.log 32192
+/home/runner/.config/unity3d/Unity/Unity.Entitlements.Audit.log 11322
