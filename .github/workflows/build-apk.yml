@@ -243,6 +243,52 @@ jobs:
           } > "$TARGET_DIR/INSPECT.txt"
           head -120 "$TARGET_DIR/INSPECT.txt"
 
+      - name: Decompress inner gzip and probe payload
+        env:
+          TARGET_DIR: ${{ inputs.target_dir }}
+        run: |
+          set -euo pipefail
+          f=$(find /tmp/assetdl/extracted -maxdepth 1 -type f | head -n 1)
+          gzip -dc "$f" > /tmp/assetdl/inner.bin
+          {
+            echo "Decompressed payload probe"
+            echo "Size: $(stat -c%s /tmp/assetdl/inner.bin) bytes"
+            file /tmp/assetdl/inner.bin || true
+            echo "----- first 512 bytes -----"
+            xxd -l 512 /tmp/assetdl/inner.bin || true
+            echo "----- strings from first 8 KiB -----"
+            head -c 8192 /tmp/assetdl/inner.bin | strings | head -160 || true
+            echo "----- tar listing attempt -----"
+            tar tf /tmp/assetdl/inner.bin 2>&1 | head -100 || true
+            echo "----- 7z listing attempt -----"
+            7z l /tmp/assetdl/inner.bin 2>&1 | head -140 || true
+            echo "----- embedded signature offsets -----"
+            python3 - <<'PY'
+          from pathlib import Path
+          data = Path('/tmp/assetdl/inner.bin').read_bytes()[:20 * 1024 * 1024]
+          for name, sig in [
+              ('zip-local', b'PK\x03\x04'),
+              ('zip-end', b'PK\x05\x06'),
+              ('gzip', b'\x1f\x8b\x08'),
+              ('ustar', b'ustar'),
+              ('sevenzip', b'7z\xbc\xaf\x27\x1c'),
+              ('rar4', b'Rar!'),
+              ('rar5', b'Rar!\x1d\x07'),
+          ]:
+              offsets = []
+              start = 0
+              while len(offsets) < 5:
+                  i = data.find(sig, start)
+                  if i < 0:
+                      break
+                  offsets.append(i)
+                  start = i + 1
+              print(f'{name}: {offsets}')
+          print('head-as-text:', repr(data[:300]))
+          PY
+          } > "$TARGET_DIR/INSPECT2.txt"
+          head -160 "$TARGET_DIR/INSPECT2.txt"
+
       - name: Commit staged assets
         run: |
           set -euo pipefail
