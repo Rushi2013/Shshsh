@@ -41,11 +41,13 @@ jobs:
         run: |
           {
             echo "Unity build diagnostics for run $GITHUB_RUN_ID"
-            echo "Searching common editor log locations..."
-            find /home/runner /tmp /github -type f \( -iname '*editor*.log' -o -iname '*unity*.log' -o -name 'build.log' \) 2>/dev/null | head -40 | while read -r f; do
-              echo "===== $f ====="
-              grep -E "error CS|error:|Compilation failed|Exception|BuildFailed|failed" "$f" 2>/dev/null | tail -120 || tail -80 "$f" 2>/dev/null
+            echo "Searching all Unity/editor log locations..."
+            find / -type f \( -iname 'Editor.log' -o -iname '*editor*.log' -o -iname '*unity*.log' -o -name 'build.log' \) 2>/dev/null | head -80 | while read -r f; do
+              echo "===== $f ($(stat -c%s "$f" 2>/dev/null) bytes) ====="
+              grep -E "error CS|error:|Compilation failed|Exception|BuildFailed|failed" "$f" 2>/dev/null | tail -150 || tail -80 "$f" 2>/dev/null
             done
+            echo "===== unity3d config tree ====="
+            find /home/runner/.config/unity3d /root/.config/unity3d -maxdepth 4 -type f -printf '%p %s\n' 2>/dev/null | head -60
           } > build-diagnostics.txt
           head -c 200000 build-diagnostics.txt > build-diagnostics-small.txt
           mv build-diagnostics-small.txt build-diagnostics.txt
