@@ -60,11 +60,6 @@ namespace CityDrive
             ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
             controller.enabled = false;
 
-            // Separate true 3D cloud geometry; skybox remains only the backdrop.
-            GameObject cloudHost = new GameObject("3D Cloud Layer");
-            CloudSky clouds = cloudHost.AddComponent<CloudSky>();
-            clouds.SetTarget(car.transform);
-
             Camera cameraComponent = Camera.main;
             if (cameraComponent == null)
             {
@@ -83,6 +78,19 @@ namespace CityDrive
             chase.Target = car.transform;
             chase.Car = controller;
             chase.SetMode(0);
+
+            // Prefer the imported UniStorm volumetric sky/cloud asset. The old
+            // procedural cloud layer is kept only as a fallback if import failed.
+            if (!UniStormSkyBridge.TryCreate(car.transform, cameraComponent))
+            {
+                GameObject cloudHost = new GameObject("3D Cloud Layer");
+                CloudSky clouds = cloudHost.AddComponent<CloudSky>();
+                clouds.SetTarget(car.transform);
+            }
+            else
+            {
+                StartCoroutine(UniStormSkyBridge.ConfigureSunWhenReady());
+            }
 
             VehicleAudio audio = car.GetComponent<VehicleAudio>();
             if (audio != null) audio.CameraRig = chase;
@@ -190,6 +198,7 @@ namespace CityDrive
                 sun = sunObject.GetComponent<Light>();
                 sun.type = LightType.Directional;
             }
+            sun.gameObject.name = "CityDrive Sun";
             sun.color = new Color(1f, 0.96f, 0.90f);
             sun.intensity = 1.15f;
             sun.shadows = LightShadows.Soft;

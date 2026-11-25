@@ -1,4 +1,0 @@
-import{j as l}from"./jsx-runtime-D_zvdyIk.js";import{v as a}from"./chunk-6KYCQHYJ-9NW3t0-R.js";import{u}from"./use-controlled-state-De2U0S5y.js";import{O as x}from"./tooltip-OntBfRHQ.js";const b=a.forwardRef(function({open:e,defaultOpen:r=!1,onOpenChange:o,content:s,...i},m){const[c,t]=u({prop:e,defaultProp:r,onChange:o}),f=!!s;return a.useEffect(()=>{t(f)},[f,t]),l.jsx(x,{ref:m,open:c,defaultOpen:r,onOpenChange:p=>{t(p),o==null||o(p)},content:s,...i})});export{b as F};
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{},n=(new Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="1e695b74-0a8c-5e6e-b2b3-d0209aef6d1d")}catch(e){}}()
-//# debugId=1e695b74-0a8c-5e6e-b2b3-d0209aef6d1d
-//# sourceMappingURL=feedback-tooltip-DATHl2nH.js.map

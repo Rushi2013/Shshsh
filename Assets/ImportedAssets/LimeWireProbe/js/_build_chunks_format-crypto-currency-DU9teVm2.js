@@ -1,4 +1,0 @@
-const C={ALGO:"ALGO",BTC:"BTC",ETH:"ETH",LMWR:"LMWR",USDC:"USDC",BASE:"BASE",BNB:"BNB"},B={ALGO:"",BTC:"",ETH:"",LMWR:"",USDC:"$",BASE:"",BNB:""},S=t=>C[t],g=t=>B[t],p=(t,n,r)=>{const{useGrouping:e=!0,minimumFractionDigits:o=2,maximumFractionDigits:c=20,includeSign:i=!0,includeName:m=!0}=r||{},u=m?S(t):"",a=i?g(t):"",s=new Intl.NumberFormat("en-US",{minimumFractionDigits:o,maximumFractionDigits:c,useGrouping:e});return`${u} ${a}${s.format(n)}`.trim()};export{p as f};
-!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{},n=(new Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="b97ea42a-caf2-561b-8be1-6f939dcb44c0")}catch(e){}}()
-//# debugId=b97ea42a-caf2-561b-8be1-6f939dcb44c0
-//# sourceMappingURL=format-crypto-currency-DU9teVm2.js.map

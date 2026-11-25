@@ -78,6 +78,15 @@ Two attached briefs were read fully. Applied:
 - Lighting guide applied: single warm-neutral sun, intensity 1.15, shadow strength 0.88, medium shadow resolution, 2 cascades, 85 m shadow distance, skybox ambient/reflections, subtle 220–700 m fog. City and car renderers now explicitly cast/receive real shadows; a small soft contact patch supplements (never replaces) the real shadow. Road/building/roughness variety tuned by material name; no HDRP/URP switch, no heavy post-processing in Built-in pipeline.
 - Backup tag before this pass: `pre-final-speed-lighting-backup`.
 
+## UniStorm sky/cloud asset integration
+
+- User supplied the complete UniStorm archive as two GitHub-hosted parts under `Assets/ImportedAssets/UniStormDownload/`. Reassembled size 145,328,613 bytes, SHA-256 `a6e851eaefff4b2aa2f4b4e53eae807e8faf60eef212c35f9ca90d00f383aec8`, verified locally before extraction.
+- The ZIP contained one extensionless gzip/tar Unity package. It was unpacked directly, preserving `.meta` GUIDs, and only the sky/cloud-relevant folders were staged into `Assets/UniStorm Weather System/` (~18 MB): scripts (runtime only), cloud shaders/cginc/compute, noise textures, skybox/cloud materials, celestial textures, cloud/weather profiles and the mobile prefab.
+- Demo scenes, documentation, terrain/grass/demo textures, sounds, VR prefab and the bundled PostProcessing package were deliberately omitted to keep the Android build small and avoid obsolete editor APIs. Weather-type sound references may show as missing; they do not affect sky/cloud rendering.
+- `UniStormSystem.cs` was patched only to remove the removed Unity 2022 `PlayerSettings.virtualRealitySupported` editor call; no visual logic was changed.
+- `UniStormSkyBridge.cs` instantiates the asset's `UniStorm Mobile System` prefab, assigns the real car/camera, sets mobile platform + medium volumetric clouds, disables the asset UI/weather generation/VR extras and sun shafts, and applies the project's soft-shadow settings once UniStorm assigns its sun. The fallback `CloudSky` is created only when the prefab is missing.
+- Backup tag before this pass: `pre-unistorm-sky-integration`.
+
 ## Verification limits
 
 No Unity Editor, Android SDK or device is available in this sandbox. Verification consists of static checks plus Unity Android builds in GitHub Actions. Runtime feel and frame rate must be confirmed on the user's device.

@@ -31,6 +31,7 @@
 ## Audio and sky
 
 - All engine, turbo, tyre, horn, impact and loading audio is generated procedurally at runtime by `VehicleAudio.cs`. No third-party recordings or BMW audio were imported.
-- The skybox uses Unity's built-in `Skybox/Procedural` shader. No external HDRI/skybox pack was downloaded.
+- The sky and clouds use the user-supplied **UniStorm Volumetric Clouds, Sky, Modular Weather and Cloud Shadows** package. The archive was supplied in two parts under `Assets/ImportedAssets/UniStormDownload/` and the required shaders, materials, noise textures, celestials and mobile prefab were extracted into `Assets/UniStorm Weather System/`. Only sky/cloud-related folders were staged; demo scenes, terrain textures, sounds and documentation were omitted. Confirm the package licence before commercial distribution.
+- `UniStormSkyBridge.cs` wires the asset's `UniStorm Mobile System` prefab to the game camera and car. The earlier procedural `CloudSky` remains only as a fallback if the asset is unavailable.
 
 The game code in `Assets/Scripts` and `Assets/Editor` was written specifically for this repository.
