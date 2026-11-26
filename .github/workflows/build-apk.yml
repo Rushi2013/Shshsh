@@ -21,6 +21,10 @@ on:
         description: "Stage RCC Pro smoke prefabs, textures and materials"
         type: boolean
         default: false
+      inspect_menu:
+        description: "Extract the user's MainMenu scene as a reference (no APK build)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,7 +32,7 @@ permissions:
 
 jobs:
   build-apk:
-    if: ${{ !inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
+    if: ${{ !inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp && !inputs.inspect_menu }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
@@ -89,7 +93,7 @@ jobs:
           files: build/**/*.apk
 
   host-apk:
-    if: ${{ inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
+    if: ${{ inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp && !inputs.inspect_menu }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -115,7 +119,7 @@ jobs:
           git push
 
   inspect-rcc:
-    if: ${{ inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
+    if: ${{ inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp && !inputs.inspect_menu }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -173,7 +177,7 @@ jobs:
           git push origin HEAD:"$GITHUB_REF_NAME"
 
   stage-rcc:
-    if: ${{ inputs.stage_rcc && !inputs.stage_rccp }}
+    if: ${{ inputs.stage_rcc && !inputs.stage_rccp && !inputs.inspect_menu }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -236,7 +240,7 @@ jobs:
           git push origin HEAD:"$GITHUB_REF_NAME"
 
   stage-rccp:
-    if: ${{ inputs.stage_rccp }}
+    if: ${{ inputs.stage_rccp && !inputs.inspect_menu }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -329,4 +333,53 @@ jobs:
           git add -f 'Assets/Realistic Car Controller Pro' Tools/RCCP-Source Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md
           if git diff --cached --quiet; then echo 'no change'; exit 0; fi
           git commit -m "Stage RCC Pro smoke prefabs and textures from user archive"
+          git push origin HEAD:"$GITHUB_REF_NAME"
+
+  inspect-menu:
+    if: ${{ inputs.inspect_menu }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install RAR tool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full
+
+      - name: Extract MainMenu reference scene
+        run: |
+          set -euo pipefail
+          D='Assets/ImportedAssets/UniStormDownload'
+          cp "$D/MainMenu.rar.part01" /tmp/MainMenu.rar
+          echo "24445234ee72e85d6cfbfd637ece3693fa5a8758feee11b683425ec4ccef7d56  /tmp/MainMenu.rar" | sha256sum --check -
+          mkdir -p /tmp/menu_ref Tools/MainMenuReference
+          7z x -y -o/tmp/menu_ref /tmp/MainMenu.rar >/dev/null
+          SCENE=$(find /tmp/menu_ref -type f -name 'MainMenu.unity' | head -1)
+          test -n "$SCENE"
+          cp "$SCENE" Tools/MainMenuReference/MainMenu.unity
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, collections
+          text = Path('Tools/MainMenuReference/MainMenu.unity').read_text(errors='ignore')
+          guids = collections.Counter(re.findall(r'guid: ([0-9a-f]{32})', text))
+          names = re.findall(r'^  m_Name: (.+)$', text, re.M)
+          lines = ['# MainMenu.unity inspection', '',
+                   f'Bytes: {Path("Tools/MainMenuReference/MainMenu.unity").stat().st_size}', '',
+                   '## Referenced GUIDs', '']
+          lines += [f'| {guid} | {count} |' for guid, count in guids.most_common()]
+          lines += ['', '## Object names', '']
+          lines += [f'- {name}' for name in names[:400]]
+          Path('Tools/MainMenuReference/MAINMENU-INSPECTION.md').write_text('\n'.join(lines) + '\n')
+          print('scene bytes', Path("Tools/MainMenuReference/MainMenu.unity").stat().st_size, 'guids', len(guids))
+          PY
+
+      - name: Commit reference inspection
+        run: |
+          set -euo pipefail
+          git config user.name 'Arena Agent'
+          git config user.email 'agent@users.noreply.github.com'
+          git add -f Tools/MainMenuReference
+          if git diff --cached --quiet; then echo 'no change'; exit 0; fi
+          git commit -m "Stage MainMenu scene reference for UI adaptation"
           git push origin HEAD:"$GITHUB_REF_NAME"
