@@ -24,7 +24,21 @@ namespace CityDrive
             get
             {
                 if (_instance == null)
-                    _instance = Resources.Load<RCCPSmokeAssets>("RCCP/RCCP_SmokeAssets");
+                {
+                    // Prefer direct prefab paths: these are the real RCCP v1.44 particle
+                    // prefabs, copied into Resources with fresh GUIDs. The ScriptableObject
+                    // remains as a fallback for existing installations.
+                    GameObject asphalt = Resources.Load<GameObject>("RCCP/RCCP_WheelSlipAsphalt");
+                    GameObject burnout = Resources.Load<GameObject>("RCCP/RCCP_WheelSlipBurnout");
+                    if (asphalt != null && burnout != null)
+                    {
+                        RCCPSmokeAssets direct = ScriptableObject.CreateInstance<RCCPSmokeAssets>();
+                        direct.wheelSlipAsphalt = asphalt;
+                        direct.wheelSlipBurnout = burnout;
+                        _instance = direct;
+                    }
+                    else _instance = Resources.Load<RCCPSmokeAssets>("RCCP/RCCP_SmokeAssets");
+                }
                 return _instance;
             }
         }

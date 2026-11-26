@@ -33,10 +33,12 @@ namespace CityDrive
         public float Throttle { get; private set; }
         public float Brake { get; private set; }
         public float Handbrake { get; private set; }
+        public float Reverse { get; private set; }
 
         private RectTransform _wheel;
         private RectTransform _gasIcon;
         private RectTransform _brakeIcon;
+        private RectTransform _reverseIcon;
         private RectTransform _driftIcon;
         private RectTransform _needle;
         private Text _speedText;
@@ -47,14 +49,18 @@ namespace CityDrive
         private float _steerTarget;
         private float _throttleSmoothed;
         private float _brakeSmoothed;
+        private float _reverseSmoothed;
         private float _handbrakeSmoothed;
         private float _displaySpeed;
 
-        private const float GasMinX = 0.70f;
-        private const float GasMinY = 0.29f;
-        private const float GasMaxY = 0.48f;
-        private const float BrakeMinY = 0.07f;
+        private const float GasMinX = 0.78f;
+        private const float GasMaxX = 0.94f;
+        private const float GasMinY = 0.30f;
+        private const float GasMaxY = 0.43f;
+        private const float BrakeMinY = 0.14f;
         private const float BrakeMaxY = 0.27f;
+        private const float ReverseMinY = 0.01f;
+        private const float ReverseMaxY = 0.13f;
         private const float DriftMinX = 0.38f;
         private const float DriftMaxX = 0.62f;
         private const float DriftMaxY = 0.18f;
@@ -93,14 +99,22 @@ namespace CityDrive
             _wheel.sizeDelta = new Vector2(340f, 340f); // square: never stretched into an oval
 
             Image gas = UiTools.MakeImage(canvasObject.transform, "Gas Pedal",
-                new Vector2(0.70f, 0.31f), new Vector2(0.98f, 0.48f),
+                new Vector2(GasMinX, GasMinY), new Vector2(GasMaxX, GasMaxY),
                 Color.white, UiTools.GetSprite("UI/icon_gas"));
             _gasIcon = gas.rectTransform;
 
             Image brake = UiTools.MakeImage(canvasObject.transform, "Brake Pedal",
-                new Vector2(0.70f, 0.09f), new Vector2(0.98f, 0.26f),
+                new Vector2(GasMinX, BrakeMinY), new Vector2(GasMaxX, BrakeMaxY),
                 Color.white, UiTools.GetSprite("UI/icon_brake"));
             _brakeIcon = brake.rectTransform;
+
+            Image reverse = UiTools.MakeImage(canvasObject.transform, "Reverse Button",
+                new Vector2(GasMinX, ReverseMinY), new Vector2(GasMaxX, ReverseMaxY),
+                new Color(0.62f, 0.66f, 1f, 1f), UiTools.GetSprite("UI/icon_brake"));
+            _reverseIcon = reverse.rectTransform;
+            UiTools.MakeText(reverse.transform, "Reverse Label", "R", 44,
+                Vector2.zero, Vector2.one, TextAnchor.MiddleCenter,
+                new Color(0.06f, 0.08f, 0.16f, 0.95f));
 
             Image drift = UiTools.MakeImage(canvasObject.transform, "Drift Button",
                 new Vector2(0.40f, 0.015f), new Vector2(0.60f, 0.15f),
@@ -258,6 +272,7 @@ namespace CityDrive
         {
             bool gasPressed = false;
             bool brakePressed = false;
+            bool reversePressed = false;
             bool driftPressed = false;
             bool keyboardSteer = false;
             float keyboardSteerValue = 0f;
@@ -290,6 +305,7 @@ namespace CityDrive
 
                 if (n.x >= GasMinX && n.y >= GasMinY && n.y <= GasMaxY) gasPressed = true;
                 if (n.x >= GasMinX && n.y >= BrakeMinY && n.y <= BrakeMaxY) brakePressed = true;
+                if (n.x >= GasMinX && n.y >= ReverseMinY && n.y <= ReverseMaxY) reversePressed = true;
                 if (n.x >= DriftMinX && n.x <= DriftMaxX && n.y <= DriftMaxY) driftPressed = true;
                 if (touch.phase == TouchPhase.Began && n.x >= 0.84f && n.y >= 0.85f && Chase != null)
                     Chase.CycleMode();
@@ -316,6 +332,7 @@ namespace CityDrive
                     {
                         if (n.x >= GasMinX && n.y >= GasMinY && n.y <= GasMaxY) gasPressed = true;
                         if (n.x >= GasMinX && n.y >= BrakeMinY && n.y <= BrakeMaxY) brakePressed = true;
+                if (n.x >= GasMinX && n.y >= ReverseMinY && n.y <= ReverseMaxY) reversePressed = true;
                         if (n.x >= DriftMinX && n.x <= DriftMaxX && n.y <= DriftMaxY) driftPressed = true;
                     }
                 }
@@ -337,6 +354,7 @@ namespace CityDrive
                 }
                 if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) gasPressed = true;
                 if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) brakePressed = true;
+                if (Input.GetKey(KeyCode.Q)) reversePressed = true;
                 if (Input.GetKey(KeyCode.Space)) driftPressed = true;
                 if (Input.GetKeyDown(KeyCode.C) && Chase != null) Chase.CycleMode();
                 if (Input.GetKeyDown(KeyCode.R) && Car != null) Car.ResetCar();
@@ -357,18 +375,23 @@ namespace CityDrive
 
             // Both pedals remain active. Brake priority and burnout torque are handled
             // by the physics controller, not by deleting the throttle input here.
-            float throttleTarget = gasPressed ? 1f : 0f;
+            bool reversing = reversePressed && !gasPressed;
+            float throttleTarget = gasPressed && !reversePressed ? 1f : 0f;
             float brakeTarget = brakePressed ? 1f : 0f;
+            float reverseTarget = reversing ? 1f : 0f;
             float driftTarget = driftPressed ? 1f : 0f;
             _throttleSmoothed = Mathf.MoveTowards(_throttleSmoothed, throttleTarget,
                 Time.unscaledDeltaTime * pedalResponse);
             _brakeSmoothed = Mathf.MoveTowards(_brakeSmoothed, brakeTarget,
                 Time.unscaledDeltaTime * pedalResponse);
+            _reverseSmoothed = Mathf.MoveTowards(_reverseSmoothed, reverseTarget,
+                Time.unscaledDeltaTime * pedalResponse);
             _handbrakeSmoothed = Mathf.MoveTowards(_handbrakeSmoothed, driftTarget,
                 Time.unscaledDeltaTime * pedalResponse);
 
             Throttle = _throttleSmoothed;
-            Brake = _brakeSmoothed;
+            Brake = Mathf.Max(_brakeSmoothed, _reverseSmoothed);
+            Reverse = _reverseSmoothed;
             Handbrake = _handbrakeSmoothed;
 
             if (Car != null)
@@ -376,6 +399,7 @@ namespace CityDrive
                 Car.SteerInput = Steer;
                 Car.ThrottleInput = Throttle;
                 Car.BrakeInput = Brake;
+                if (_reverseSmoothed > 0.05f) Car.ThrottleInput = 0f;
                 Car.HandbrakeInput = Handbrake;
             }
 
@@ -388,6 +412,7 @@ namespace CityDrive
             }
             ScaleIcon(_gasIcon, throttleTarget > 0f);
             ScaleIcon(_brakeIcon, brakeTarget > 0f);
+            ScaleIcon(_reverseIcon, reverseTarget > 0f);
             ScaleIcon(_driftIcon, driftTarget > 0f);
 
             UpdateSpeedometer();

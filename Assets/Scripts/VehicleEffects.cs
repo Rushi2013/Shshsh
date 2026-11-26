@@ -21,9 +21,9 @@ namespace CityDrive
 
         [Header("RCC Pro slip smoke")]
         [Tooltip("Slip threshold mapped to RCCP's asphalt ground-material slip value.")]
-        [SerializeField] private float rccpSlipThreshold = 0.15f;
-        [SerializeField] private float burnoutSlipThreshold = 0.12f;
-        [SerializeField] private float smokeEmissionMultiplier = 1.35f;
+        [SerializeField] private float rccpSlipThreshold = 0.12f;
+        [SerializeField] private float burnoutSlipThreshold = 0.08f;
+        [SerializeField] private float smokeEmissionMultiplier = 2.2f;
 
         private sealed class Mark
         {
@@ -239,6 +239,18 @@ namespace CityDrive
                     {
                         burnout = true;
                         targetSlip = Mathf.Max(targetSlip, Mathf.Clamp01(wheel.BurnoutSlip / 0.5f));
+                    }
+
+                    // Requested smoke behaviour: a light trail follows the rear tyres
+                    // whenever the car accelerates, and the front tyres smoke during a
+                    // drift. Ground contact and real road speed are still required.
+                    float roadSpeed = Mathf.Abs(wheel.GroundSpeed);
+                    bool rearAccel = i >= 2 && Car.ThrottleInput > 0.25f && roadSpeed > 2f;
+                    bool frontDrift = i < 2 && Car.HandbrakeInput > 0.45f && roadSpeed > 4f;
+                    if (rearAccel || frontDrift)
+                    {
+                        burnout = rearAccel && wheel.BurnoutSlip >= burnoutSlipThreshold;
+                        targetSlip = Mathf.Max(targetSlip, rearAccel ? 0.32f : 0.42f);
                     }
                 }
 

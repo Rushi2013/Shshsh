@@ -1,114 +1,100 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace CityDrive
 {
     /// <summary>
-    /// Loads the supplied city GLB, orients it upright, and creates colliders only
-    /// where they are useful: roads, pavements, ramps and terrain get proper mesh
-    /// colliders; buildings get cheap boxes; small decorations get none. A separate
-    /// ground fallback guarantees the wheels always have a driveable surface.
+    /// Loads the user's NEW city model (CIT.obj) and derives its lane graph from
+    /// the actual flat road-surface mesh in that file. The graph was extracted
+    /// offline from the 208 flat quads of the source mesh (RoadGraph.txt); at
+    /// runtime every node/edge is raycast against the imported road collider
+    /// before it is published to traffic. Old city/fallback ground are not used.
     /// </summary>
     public sealed class CityBuilder : MonoBehaviour
     {
         private GameObject _city;
+        private Transform _roadTransform;
+        private readonly List<Vector3> _lanes = new List<Vector3>();
+        private readonly List<List<int>> _neighbors = new List<List<int>>();
+        private int _validEdges;
 
         public Bounds Bounds { get; private set; }
         public bool IsReady { get; private set; }
         public GameObject Root => _city;
         public Quaternion SpawnRotation { get; private set; } = Quaternion.identity;
+        public Vector3[] LaneWaypoints => _lanes.ToArray();
+        public int[] NeighborsOf(int node) => node >= 0 && node < _neighbors.Count
+            ? _neighbors[node].ToArray() : new int[0];
+        public float LaneWidth { get; private set; } = 12f;
 
-        /// <param name="prefab">Optional prefab already loaded asynchronously by GameBootstrap.</param>
         public IEnumerator Build(GameObject prefab = null)
         {
-            if (prefab == null) prefab = Resources.Load<GameObject>("City/city");
+            if (prefab == null) prefab = Resources.Load<GameObject>("CityNew/CIT");
             if (prefab == null)
             {
-                Debug.LogError("[CityDrive] Assets/Resources/City/city.glb could not be loaded. " +
-                               "Make sure com.unity.cloud.gltfast is installed so the GLB imports as a prefab.");
-                Bounds = new Bounds(Vector3.zero, new Vector3(200f, 10f, 200f));
+                Debug.LogError("[CityDrive] New city CIT.obj was not imported under Resources/CityNew.");
+                Bounds = new Bounds(Vector3.zero, new Vector3(300f, 10f, 300f));
                 IsReady = true;
                 yield break;
             }
 
             _city = Instantiate(prefab, Vector3.zero, Quaternion.identity);
-            _city.name = "City (GLB)";
+            _city.name = "New City (CIT.obj)";
             OrientCity();
-            yield return null; // let the imported hierarchy settle for one frame
-
-            RecalculateBounds();
-
-            // Put the ground at y = 0 and the town centre at (0, 0, 0).
-            Vector3 offset = new Vector3(-Bounds.center.x, -Bounds.min.y, -Bounds.center.z);
-            _city.transform.position += offset;
             yield return null;
 
-            RecalculateBounds();
+            ScaleAndGround();
+            yield return null;
             AddColliders();
+            yield return null;
+            BuildRoadGraph();
+            SpawnRotation = SpawnRotationForFirstLane();
             ConfigureVisuals();
             IsReady = true;
         }
 
         private void OrientCity()
         {
-            List<Renderer> roads = new List<Renderer>();
-            List<Renderer> buildings = new List<Renderer>();
-            foreach (Renderer renderer in _city.GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null) continue;
-                string name = renderer.gameObject.name.ToLowerInvariant();
-                if (roads.Count < 16 &&
-                    (name.Contains("road") || name.Contains("street") || name.Contains("asphalt") ||
-                     name.Contains("pavement")))
-                    roads.Add(renderer);
-                if (buildings.Count < 16 &&
-                    (name.Contains("building") || name.Contains("house") || name.Contains("tower")))
-                    buildings.Add(renderer);
-            }
-
             Quaternion[] candidates =
             {
                 Quaternion.identity,
+                Quaternion.Euler(0f, 180f, 0f),
                 Quaternion.Euler(90f, 0f, 0f),
-                Quaternion.Euler(-90f, 0f, 0f),
-                Quaternion.Euler(180f, 0f, 0f),
-                Quaternion.Euler(0f, 0f, 180f),
-                Quaternion.Euler(0f, 180f, 0f)
+                Quaternion.Euler(-90f, 0f, 0f)
             };
-
-            float bestScore = float.MaxValue;
-            Quaternion best = Quaternion.identity;
+            float best = float.MaxValue;
+            Quaternion chosen = Quaternion.identity;
             foreach (Quaternion candidate in candidates)
             {
                 _city.transform.rotation = candidate;
                 Physics.SyncTransforms();
-                float roadThickness = AverageHeight(roads);
-                float buildingHeight = AverageHeight(buildings);
-                Bounds bounds = ComputeBounds();
-                float score = roadThickness * 14f +
-                              (buildingHeight > 1f ? 40f / buildingHeight : 100f) +
-                              Mathf.Abs(bounds.size.y - 100f) * 0.02f;
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    best = candidate;
-                }
+                Bounds b = ComputeBounds();
+                // Buildings define the vertical axis; the sky plane is ignored later.
+                float score = Mathf.Abs(b.size.y - 60f) * 0.4f + Mathf.Abs(b.size.x - b.size.z) * 0.05f;
+                if (score < best) { best = score; chosen = candidate; }
             }
-
-            _city.transform.rotation = best;
+            _city.transform.rotation = chosen;
             Physics.SyncTransforms();
-            Debug.Log("[CityDrive] City oriented with rotation " + best.eulerAngles +
-                      " (score " + bestScore.ToString("F1") + ")");
+            Debug.Log("[CityDrive] New city orientation " + chosen.eulerAngles + " score " + best.ToString("F1"));
         }
 
-        private static float AverageHeight(List<Renderer> renderers)
+        private void ScaleAndGround()
         {
-            if (renderers.Count == 0) return 999f;
-            float total = 0f;
-            foreach (Renderer renderer in renderers) total += renderer.bounds.size.y;
-            return total / renderers.Count;
+            Bounds raw = ComputeBounds();
+            float footprint = Mathf.Max(raw.size.x, raw.size.z);
+            // Sky plane inflates the raw OBJ bounds; keep the city close to source scale.
+            float scale = footprint > 1f ? Mathf.Clamp(600f / footprint, 0.45f, 1.5f) : 1f;
+            _city.transform.localScale *= scale;
+            Physics.SyncTransforms();
+
+            Bounds scaled = ComputeBounds();
+            _city.transform.position += new Vector3(-scaled.center.x, -scaled.min.y, -scaled.center.z);
+            Physics.SyncTransforms();
+            RecalculateBounds();
         }
 
         private Bounds ComputeBounds()
@@ -119,182 +105,188 @@ namespace CityDrive
             foreach (Renderer renderer in renderers)
             {
                 if (renderer == null || renderer.bounds.size == Vector3.zero) continue;
-                if (first)
-                {
-                    result = renderer.bounds;
-                    first = false;
-                }
+                if (first) { result = renderer.bounds; first = false; }
                 else result.Encapsulate(renderer.bounds);
             }
-            if (first) result = new Bounds(Vector3.zero, new Vector3(200f, 10f, 200f));
+            if (first) result = new Bounds(Vector3.zero, new Vector3(300f, 10f, 300f));
             return result;
         }
 
-        private void RecalculateBounds()
+        private void RecalculateBounds() => Bounds = ComputeBounds();
+
+        private void AddColliders()
         {
-            Bounds = ComputeBounds();
+            int mesh = 0;
+            int skipped = 0;
+            foreach (MeshFilter filter in _city.GetComponentsInChildren<MeshFilter>(true))
+            {
+                GameObject go = filter.gameObject;
+                string name = go.name.ToLowerInvariant();
+                if (name.Contains("skies") || name.Contains("hdri")) continue; // sky is not ground
+                if (go.GetComponent<Collider>() != null) continue;
+                Mesh meshAsset = filter.sharedMesh;
+                if (meshAsset == null) continue;
+
+                // The source has a few very long building aggregate meshes. Single
+                // box colliders around these would seal the roads, so skip them;
+                // road and individual building meshes get accurate mesh colliders.
+                Bounds local = meshAsset.bounds;
+                bool largeAggregate = !name.Contains("plane") &&
+                    (local.size.x > 140f || local.size.z > 140f) && meshAsset.triangles.Length / 3 > 20000;
+                if (largeAggregate) { skipped++; continue; }
+
+                MeshCollider collider = go.AddComponent<MeshCollider>();
+                collider.sharedMesh = meshAsset;
+                collider.convex = false;
+                mesh++;
+            }
+            Debug.Log("[CityDrive] New city colliders: " + mesh + " mesh; skipped " + skipped +
+                      " oversized building aggregates.");
         }
 
-        private static bool IsDrivableSurface(string name)
+        /// <summary>
+        /// Finds the flat surface mesh that carries the road grid. Name alone is not
+        /// enough: it must have many vertices, span the city, and be almost perfectly
+        /// flat. This matches the measured Plane.001 source geometry (208 flat quads).
+        /// </summary>
+        private Transform FindRoadSurface()
         {
-            string lower = name.ToLowerInvariant();
-            return lower.Contains("road") || lower.Contains("street") || lower.Contains("ground") ||
-                   lower.Contains("floor") || lower.Contains("asphalt") || lower.Contains("pavement") ||
-                   lower.Contains("sidewalk") || lower.Contains("terrain") || lower.Contains("surface") ||
-                   lower.Contains("rampa") || lower.Contains("ramp");
+            Transform best = null;
+            float bestScore = float.MaxValue;
+            foreach (MeshFilter filter in _city.GetComponentsInChildren<MeshFilter>(true))
+            {
+                Mesh mesh = filter.sharedMesh;
+                if (mesh == null || mesh.vertexCount < 150) continue;
+                Bounds b = mesh.bounds;
+                if (b.size.x < 150f || b.size.z < 150f || b.size.y > 8f) continue;
+                float score = b.size.y + (filter.gameObject.name.ToLowerInvariant().Contains("plane.001") ? 0f : 4f);
+                if (score < bestScore) { bestScore = score; best = filter.transform; }
+            }
+            return best;
         }
 
-        private static bool IsBuilding(string name)
+        private void BuildRoadGraph()
         {
-            string lower = name.ToLowerInvariant();
-            return lower.Contains("building") || lower.Contains("house") || lower.Contains("tower") ||
-                   lower.Contains("facade") || lower.Contains("wall");
+            _lanes.Clear();
+            _neighbors.Clear();
+            _validEdges = 0;
+            _roadTransform = FindRoadSurface();
+            if (_roadTransform == null)
+            {
+                Debug.LogError("[CityDrive] Could not identify the flat road mesh in CIT.obj; " +
+                               "player spawn and traffic are disabled until road geometry is authored.");
+                return;
+            }
+
+            TextAsset graph = Resources.Load<TextAsset>("CityNew/RoadGraph");
+            if (graph == null)
+            {
+                Debug.LogError("[CityDrive] Missing Resources/CityNew/RoadGraph.txt; no road lane graph.");
+                return;
+            }
+
+            string[] lines = graph.text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length < 2 || !lines[0].StartsWith("NODES ")) return;
+            string[] header = lines[0].Split(' ');
+            int nodeCount = int.Parse(header[1], CultureInfo.InvariantCulture);
+            int edgeCount = int.Parse(header[2], CultureInfo.InvariantCulture);
+            Vector3[] local = new Vector3[nodeCount];
+            bool[] valid = new bool[nodeCount];
+
+            for (int i = 0; i < nodeCount && i + 1 < lines.Length; i++)
+            {
+                string[] parts = lines[i + 1].Split(' ');
+                if (parts.Length < 4 || parts[0] != "N") continue;
+                float x = float.Parse(parts[1], CultureInfo.InvariantCulture);
+                float y = float.Parse(parts[2], CultureInfo.InvariantCulture);
+                float z = float.Parse(parts[3], CultureInfo.InvariantCulture);
+                local[i] = new Vector3(x, y, z);
+                Vector3 world = _roadTransform.TransformPoint(local[i]);
+                valid[i] = HitsRoad(world, out Vector3 surface);
+                if (valid[i])
+                {
+                    // Keep the extracted road height, corrected to the actual collider.
+                    _lanes.Add(new Vector3(world.x, surface.y, world.z));
+                }
+                else _lanes.Add(world); // stable index mapping; node is filtered via valid[]
+            }
+
+            for (int i = 0; i < nodeCount; i++) _neighbors.Add(new List<int>());
+            int edgeIndex = 1 + nodeCount;
+            for (int e = 0; e < edgeCount && edgeIndex + e < lines.Length; e++)
+            {
+                string[] parts = lines[edgeIndex + e].Split(' ');
+                if (parts.Length < 3 || parts[0] != "E") continue;
+                int a = int.Parse(parts[1], CultureInfo.InvariantCulture);
+                int b = int.Parse(parts[2], CultureInfo.InvariantCulture);
+                if (a < 0 || b < 0 || a >= nodeCount || b >= nodeCount || !valid[a] || !valid[b]) continue;
+                Vector3 mid = Vector3.Lerp(_lanes[a], _lanes[b], 0.5f);
+                if (!HitsRoad(mid, out Vector3 surface)) continue;
+                // A lane segment must stay on the road surface, not jump across a gap.
+                if (Mathf.Abs(surface.y - mid.y) > 1.5f) continue;
+                _neighbors[a].Add(b);
+                _neighbors[b].Add(a);
+                _validEdges++;
+            }
+
+            int usable = 0;
+            for (int i = 0; i < nodeCount; i++) if (valid[i] && _neighbors[i].Count > 0) usable++;
+            Debug.Log("[CityDrive] Road graph: " + usable + " validated nodes / " + _validEdges +
+                      " validated edges on " + _roadTransform.name + ".");
         }
 
-        /// <summary>Real shadows for city geometry and restrained PBR roughness variety.</summary>
+        private bool HitsRoad(Vector3 world, out Vector3 surface)
+        {
+            surface = world;
+            if (_roadTransform == null) return false;
+            Vector3 origin = world + Vector3.up * 30f;
+            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 80f, ~0, QueryTriggerInteraction.Ignore))
+                return false;
+            Transform t = hit.collider.transform;
+            if (t != _roadTransform && !t.IsChildOf(_roadTransform)) return false;
+            surface = hit.point;
+            return true;
+        }
+
         private void ConfigureVisuals()
         {
             foreach (Renderer renderer in _city.GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null) continue;
+                string name = renderer.gameObject.name.ToLowerInvariant();
+                if (name.Contains("skies") || name.Contains("hdri"))
+                {
+                    renderer.enabled = false; // UniStorm owns the sky
+                    continue;
+                }
                 bool sizeable = renderer.bounds.size.sqrMagnitude > 0.25f;
                 renderer.shadowCastingMode = sizeable ? ShadowCastingMode.On : ShadowCastingMode.Off;
                 renderer.receiveShadows = sizeable;
-
-                Material[] materials = renderer.sharedMaterials;
-                foreach (Material material in materials)
-                {
-                    if (material == null || !material.HasProperty("_Glossiness")) continue;
-                    string name = material.name.ToLowerInvariant();
-                    if (name.Contains("glass") || name.Contains("window"))
-                        material.SetFloat("_Glossiness", 0.86f);
-                    else if (name.Contains("road") || name.Contains("asphalt") ||
-                             name.Contains("concrete") || name.Contains("pavement") ||
-                             name.Contains("brick") || name.Contains("terrain"))
-                        material.SetFloat("_Glossiness", 0.26f);
-                    else
-                        material.SetFloat("_Glossiness", 0.42f);
-                }
             }
         }
 
-        private void AddColliders()
-        {
-            MeshFilter[] filters = _city.GetComponentsInChildren<MeshFilter>(true);
-            int meshColliders = 0;
-            int boxColliders = 0;
-            int skipped = 0;
-
-            foreach (MeshFilter filter in filters)
-            {
-                Mesh mesh = filter.sharedMesh;
-                if (mesh == null) continue;
-
-                GameObject go = filter.gameObject;
-                if (go.GetComponent<Collider>() != null) continue;
-
-                Bounds local = mesh.bounds;
-                float biggest = Mathf.Max(local.size.x, local.size.y, local.size.z);
-                string name = go.name + " " + (go.transform.parent != null ? go.transform.parent.name : "");
-                bool drivable = IsDrivableSurface(name);
-                bool building = IsBuilding(name);
-                // Large unnamed meshes are usually buildings; tiny decorations get no collider.
-                if (!drivable && !building && biggest < 8f)
-                {
-                    skipped++;
-                    continue;
-                }
-                if (!drivable && !building) building = true;
-
-                bool readable = mesh.isReadable;
-                if (drivable && readable && mesh.triangles.Length / 3 <= 260000)
-                {
-                    MeshCollider collider = go.AddComponent<MeshCollider>();
-                    collider.sharedMesh = mesh;
-                    collider.convex = false;
-                    meshColliders++;
-                }
-                else if (building || drivable)
-                {
-                    // Cheap approximation for detailed buildings and unreadable roads.
-                    BoxCollider collider = go.AddComponent<BoxCollider>();
-                    collider.center = local.center;
-                    collider.size = new Vector3(
-                        Mathf.Max(local.size.x, 0.05f),
-                        Mathf.Max(local.size.y, 0.1f),
-                        Mathf.Max(local.size.z, 0.05f));
-                    boxColliders++;
-                }
-                go.isStatic = true;
-            }
-
-            Debug.Log("[CityDrive] City colliders: " + meshColliders + " mesh / " + boxColliders +
-                      " box, " + skipped + " decorative meshes skipped.");
-        }
-
-        /// <summary>Picks a real road mesh near the town centre and spawns the car on it.</summary>
         public Vector3 FindSpawnPoint()
         {
-            Vector3 centre = Bounds.center;
-            Renderer[] renderers = _city.GetComponentsInChildren<Renderer>(true);
-            Renderer bestRoad = null;
-            float bestDistance = float.MaxValue;
-
-            foreach (Renderer renderer in renderers)
+            for (int i = 0; i < _neighbors.Count; i++)
             {
-                if (renderer == null || renderer.bounds.size.y > 8f) continue;
-                string name = renderer.gameObject.name.ToLowerInvariant();
-                if (!(name.Contains("road") || name.Contains("street") || name.Contains("asphalt"))) continue;
-                if (name.Contains("sidewalk")) continue;
-                float distance = Vector2.Distance(
-                    new Vector2(renderer.bounds.center.x, renderer.bounds.center.z),
-                    new Vector2(centre.x, centre.z));
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    bestRoad = renderer;
-                }
+                if (_neighbors[i].Count == 0) continue;
+                return _lanes[i] + Vector3.up * 1.1f;
             }
+            Debug.LogError("[CityDrive] No validated road node for player spawn.");
+            return Vector3.up * 2f;
+        }
 
-            if (bestRoad != null)
+        public Quaternion SpawnRotationForFirstLane()
+        {
+            for (int i = 0; i < _neighbors.Count; i++)
             {
-                Vector3 origin = bestRoad.bounds.center + Vector3.up * 20f;
-                RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 60f,
-                    ~0, QueryTriggerInteraction.Ignore);
-                foreach (RaycastHit hit in hits)
-                {
-                    if (hit.collider == null || hit.normal.y < 0.9f) continue;
-                    string name = hit.collider.gameObject.name.ToLowerInvariant();
-                    if (!(name.Contains("road") || name.Contains("street") || name.Contains("asphalt"))) continue;
-                    Vector3 size = bestRoad.bounds.size;
-                    SpawnRotation = size.x > size.z
-                        ? Quaternion.Euler(0f, 90f, 0f)
-                        : Quaternion.identity;
-                    Debug.Log("[CityDrive] Spawning on road: " + hit.collider.gameObject.name);
-                    return hit.point + Vector3.up * 1.1f;
-                }
+                if (_neighbors[i].Count == 0) continue;
+                Vector3 direction = _lanes[_neighbors[i][0]] - _lanes[i];
+                direction.y = 0f;
+                return direction.sqrMagnitude > 0.01f
+                    ? Quaternion.LookRotation(direction.normalized, Vector3.up) : Quaternion.identity;
             }
-
-            Debug.LogWarning("[CityDrive] Road mesh not found; falling back to a raycast near the centre.");
-            Vector3[] offsets =
-            {
-                Vector3.zero,
-                new Vector3(10f, 0f, 0f), new Vector3(-10f, 0f, 0f),
-                new Vector3(0f, 0f, 10f), new Vector3(0f, 0f, -10f)
-            };
-            foreach (Vector3 offset in offsets)
-            {
-                Vector3 origin = new Vector3(centre.x + offset.x, Bounds.max.y + 10f, centre.z + offset.z);
-                RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, Bounds.size.y + 30f,
-                    ~0, QueryTriggerInteraction.Ignore);
-                foreach (RaycastHit hit in hits)
-                {
-                    if (hit.collider != null && hit.normal.y > 0.75f && hit.point.y > -1f)
-                        return hit.point + Vector3.up * 1.1f;
-                }
-            }
-
-            return new Vector3(centre.x, 2f, centre.z);
+            return Quaternion.identity;
         }
     }
 }

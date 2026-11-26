@@ -13,7 +13,7 @@ namespace CityDrive
     public sealed class GameBootstrap : MonoBehaviour
     {
         private const string CarResource = "Vehicles/BMW330i/bmw330i";
-        private const string CityResource = "City/city";
+        private const string CityResource = "CityNew/CIT";
         private const float ModelScale = 90f;
 
         private static readonly Color[] BodyColors =
@@ -66,13 +66,7 @@ namespace CityDrive
             CityBuilder city = cityHost.AddComponent<CityBuilder>();
             yield return StartCoroutine(city.Build(cityPrefab));
 
-            CreateGroundFallback(cityHost.transform, city.Bounds);
             SetupEnvironment();
-
-            // Ambient traffic uses the supplied Complete Vehicle Pack prefabs and
-            // follows a waypoint loop inside the city bounds.
-            TrafficSystem traffic = cityHost.AddComponent<TrafficSystem>();
-            traffic.Build(city);
 
             loading.SetProgress(0.78f, "BUILDING CAR", "Preparing suspension, tyres and audio...");
             Vector3 spawn = city.FindSpawnPoint();
@@ -92,6 +86,10 @@ namespace CityDrive
             ApplyBodyColor(car, MenuSettings.BodyColor);
             ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
             controller.enabled = false;
+
+            // Traffic is built after the player exists so its sensors can include it.
+            TrafficSystem traffic = cityHost.AddComponent<TrafficSystem>();
+            traffic.Build(city);
 
             Camera cameraComponent = Camera.main;
             if (cameraComponent == null)
@@ -356,7 +354,7 @@ namespace CityDrive
         /// effects remain attached to the same rigidbody, so a garage selection is
         /// reflected both in the showroom and in the gameplay map.
         /// </summary>
-        public static GameObject SetPlayerVisual(GameObject car, GameObject prefab)
+        public static GameObject SetPlayerVisual(GameObject car, GameObject prefab, bool lockWheelsForPreview = true)
         {
             if (car == null || prefab == null) return null;
             for (int i = car.transform.childCount - 1; i >= 0; i--)
@@ -372,6 +370,11 @@ namespace CityDrive
             visual.transform.localRotation = Quaternion.identity;
             UpgradeMaterials(visual);
             FitCarVisual(car, visual, true); // garage GLBs can have any source scale
+            VehicleVisuals previewVisuals = car.GetComponent<VehicleVisuals>();
+            if (lockWheelsForPreview && previewVisuals != null)
+                previewVisuals.SetSpinEnabled(false); // skinned GLB bones orbit if spun
+            else if (previewVisuals != null)
+                previewVisuals.SetSpinEnabled(true);
             return visual;
         }
 
@@ -473,7 +476,7 @@ namespace CityDrive
             {
                 Bounds raw = BoundsOf(visual);
                 float footprint = Mathf.Max(raw.size.x, raw.size.z);
-                if (footprint > 0.01f && Mathf.Abs(footprint - 4.23f) > 0.35f)
+                if (footprint > 0.01f)
                     visual.transform.localScale *= 4.23f / footprint;
             }
 
@@ -537,11 +540,23 @@ namespace CityDrive
 
             visual.transform.localRotation = bestRotation;
             Physics.SyncTransforms();
+
+            // Align wheel centres to the suspension contact height before fitting the
+            // body. Imported GLBs place their wheel pivots at very different heights.
+            List<Transform> allWheels = new List<Transform>(frontWheels);
+            allWheels.AddRange(rearWheels);
+            if (allWheels.Count > 0)
+            {
+                float wheelY = AverageY(allWheels);
+                visual.transform.localPosition += Vector3.up * ((car.transform.position.y - 0.58f) - wheelY);
+                Physics.SyncTransforms();
+            }
+
             bestBounds = BoundsOf(visual);
             Vector3 center = bestBounds.center - car.transform.position;
             visual.transform.localPosition = new Vector3(
                 -center.x,
-                -0.65f - bestBounds.min.y + car.transform.position.y,
+                visual.transform.localPosition.y,
                 -center.z);
             Debug.Log("[CityDrive] BMW visual fitted, score=" + bestScore +
                       " size=" + bestBounds.size + " rotation=" + bestRotation.eulerAngles);

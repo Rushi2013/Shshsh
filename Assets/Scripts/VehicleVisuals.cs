@@ -20,6 +20,22 @@ namespace CityDrive
 
         public bool HasOriginalInteriorWheel => _originalInteriorWheel != null;
 
+        private bool _spinEnabled = true;
+
+        /// <summary>Some imported GLBs have skinned wheel bones; rotating them locally makes
+        /// the wheels orbit the car. Keep their wheel meshes static instead.</summary>
+        public void SetSpinEnabled(bool enabled)
+        {
+            _spinEnabled = enabled;
+            if (!enabled)
+            {
+                for (int i = 0; i < _wheels.Length; i++)
+                {
+                    if (_wheels[i] != null) _wheels[i].localRotation = _baseRotations[i];
+                }
+            }
+        }
+
         public void FindWheels(Transform modelRoot)
         {
             if (modelRoot == null) return;
@@ -114,6 +130,7 @@ namespace CityDrive
         public void UpdateWheels(float frontLeftSteer, float frontRightSteer,
             float rearLeftSteer, float rearRightSteer, float[] spinDegrees)
         {
+            if (!_spinEnabled) return;
             float[] steer = { frontLeftSteer, frontRightSteer, rearLeftSteer, rearRightSteer };
 
             for (int i = 0; i < 4; i++)

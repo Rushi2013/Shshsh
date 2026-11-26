@@ -47,8 +47,40 @@ public static class ProjectSetup
         QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
         QualitySettings.pixelLightCount = 4;
 
+        EnsureCityImportSettings();
         EnsureScene();
         EnsureSkybox();
+    }
+
+    /// <summary>
+    /// CIT.obj is loaded at runtime and its road mesh is raycast for the lane
+    /// graph. Mesh colliders need readable mesh data; cap the very large source
+    /// textures for mobile memory without changing any imported asset GUID.
+    /// </summary>
+    private static void EnsureCityImportSettings()
+    {
+        const string model = "Assets/Resources/CityNew/CIT.obj";
+        ModelImporter importer = AssetImporter.GetAtPath(model) as ModelImporter;
+        if (importer != null)
+        {
+            bool changed = false;
+            if (!importer.isReadable) { importer.isReadable = true; changed = true; }
+            if (Mathf.Abs(importer.globalScale - 1f) > 0.001f) { importer.globalScale = 1f; changed = true; }
+            if (changed) importer.SaveAndReimport();
+        }
+
+        foreach (string path in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Resources/CityNew" }))
+        {
+            string texturePath = AssetDatabase.GUIDToAssetPath(path);
+            TextureImporter texture = AssetImporter.GetAtPath(texturePath) as TextureImporter;
+            if (texture == null) continue;
+            TextureImporterSettings settings = new TextureImporterSettings();
+            texture.ReadTextureSettings(settings);
+            if (settings.maxTextureSize <= 2048) continue;
+            texture.maxTextureSize = 2048;
+            texture.textureCompression = TextureImporterCompression.Compressed;
+            texture.SaveAndReimport();
+        }
     }
 
     /// <summary>

@@ -526,13 +526,14 @@ namespace CityDrive
 
         private void OnCarSelected(GameObject prefab, string displayName)
         {
-            GameObject visual = GameBootstrap.SetPlayerVisual(_car, prefab);
+            GameObject visual = GameBootstrap.SetPlayerVisual(_car, prefab, true);
             if (visual == null) return;
             VehicleVisuals visuals = _car.GetComponent<VehicleVisuals>();
             if (visuals != null)
             {
                 visuals.FindWheels(_car.transform);
                 visuals.FindOriginalInteriorWheel(visual.transform);
+                visuals.SetSpinEnabled(false); // freeze skinned wheel bones in showroom
             }
             GameBootstrap.ApplyBodyColor(_car, MenuSettings.BodyColor);
             MenuSettings.SelectCar(prefab.name);
@@ -543,7 +544,7 @@ namespace CityDrive
         private void Update()
         {
             if (_playing || _car == null) return;
-            _showroomYaw = (_showroomYaw + 26f * Time.unscaledDeltaTime) % 360f;
+            // Selected cars stay straight; the rotating showcase platform was removed.
             _car.transform.SetPositionAndRotation(_showroomPosition,
                 Quaternion.Euler(0f, _showroomYaw, 0f));
         }

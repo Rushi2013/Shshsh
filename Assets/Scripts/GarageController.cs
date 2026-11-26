@@ -125,8 +125,30 @@ namespace CityDrive
             const int height = 144;
             GameObject temp = UnityEngine.Object.Instantiate(prefab, new Vector3(1000f, 0f, 0f), Quaternion.identity);
             Bounds bounds = new Bounds(temp.transform.position, Vector3.one);
-            foreach (Renderer renderer in temp.GetComponentsInChildren<Renderer>())
-                bounds.Encapsulate(renderer.bounds);
+            bool found = false;
+            foreach (Renderer renderer in temp.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.bounds.size == Vector3.zero) continue;
+                if (!found) { bounds = renderer.bounds; found = true; }
+                else bounds.Encapsulate(renderer.bounds);
+
+                // glTFast materials can render dark in an off-screen preview camera.
+                // Use the built-in Standard shader with the original texture and colour.
+                Shader standard = Shader.Find("Standard");
+                if (standard == null) continue;
+                Material[] materials = renderer.sharedMaterials;
+                for (int m = 0; m < materials.Length; m++)
+                {
+                    Material source = materials[m];
+                    if (source == null || source.shader == null || !source.shader.isSupported) continue;
+                    Material promoted = new Material(standard);
+                    if (source.HasProperty("_MainTex")) promoted.mainTexture = source.mainTexture;
+                    if (source.HasProperty("_Color")) promoted.color = source.color;
+                    materials[m] = promoted;
+                }
+                renderer.sharedMaterials = materials;
+            }
+            if (!found) return null;
 
             float radius = Mathf.Max(2f, bounds.size.magnitude * 0.5f);
             Vector3 centre = bounds.center;
@@ -143,6 +165,11 @@ namespace CityDrive
             light.type = LightType.Directional;
             light.intensity = 1.5f;
             light.transform.rotation = Quaternion.Euler(40f, -35f, 0f);
+            Light fill = cameraObject.AddComponent<Light>();
+            fill.type = LightType.Directional;
+            fill.intensity = 0.9f;
+            fill.color = new Color(0.72f, 0.84f, 1f);
+            fill.transform.rotation = Quaternion.Euler(25f, 145f, 0f);
 
             RenderTexture rt = RenderTexture.GetTemporary(width, height, 24);
             camera.targetTexture = rt;
