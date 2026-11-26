@@ -116,8 +116,8 @@ namespace CityDrive
             RenderTexture.active = previous;
             camera.targetTexture = null;
             RenderTexture.ReleaseTemporary(rt);
-            Object.Destroy(cameraObject);
-            Object.Destroy(temp);
+            UnityEngine.Object.Destroy(cameraObject);
+            UnityEngine.Object.Destroy(temp);
             return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
         }
 

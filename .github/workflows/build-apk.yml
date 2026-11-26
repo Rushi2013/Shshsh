@@ -17,6 +17,10 @@ on:
         description: "Stage RCC dashboard/speedometer textures into Resources"
         type: boolean
         default: false
+      stage_rccp:
+        description: "Stage RCC Pro smoke prefabs, textures and materials"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,7 +28,7 @@ permissions:
 
 jobs:
   build-apk:
-    if: ${{ !inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc }}
+    if: ${{ !inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
@@ -85,7 +89,7 @@ jobs:
           files: build/**/*.apk
 
   host-apk:
-    if: ${{ inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc }}
+    if: ${{ inputs.host_only && !inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -111,7 +115,7 @@ jobs:
           git push
 
   inspect-rcc:
-    if: ${{ inputs.inspect_rcc && !inputs.stage_rcc }}
+    if: ${{ inputs.inspect_rcc && !inputs.stage_rcc && !inputs.stage_rccp }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -169,7 +173,7 @@ jobs:
           git push origin HEAD:"$GITHUB_REF_NAME"
 
   stage-rcc:
-    if: ${{ inputs.stage_rcc }}
+    if: ${{ inputs.stage_rcc && !inputs.stage_rccp }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -229,4 +233,81 @@ jobs:
           git add -f Assets/Resources/UI/RCC
           if git diff --cached --quiet; then echo 'no change'; exit 0; fi
           git commit -m "Stage RCC speedometer textures from user archive"
+          git push origin HEAD:"$GITHUB_REF_NAME"
+
+  stage-rccp:
+    if: ${{ inputs.stage_rccp }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install RAR tool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full
+
+      - name: Reassemble and stage RCC Pro smoke assets
+        run: |
+          set -euo pipefail
+          D='Assets/ImportedAssets/UniStormDownload'
+          mkdir -p /tmp/rccp
+          cat "$D/Realistic Car Controller Pro v1.44.0.rar.part01" \
+              "$D/Realistic Car Controller Pro v1.44.0.rar.part02" \
+              "$D/Realistic Car Controller Pro v1.44.0.rar.part03" \
+              "$D/Realistic Car Controller Pro v1.44.0.rar.part04" \
+              "$D/Realistic Car Controller Pro v1.44.0.rar.part05" > /tmp/rccp/RCCP.rar
+          sha256sum /tmp/rccp/RCCP.rar
+          7z x -y -o/tmp/rccp /tmp/rccp/RCCP.rar >/dev/null
+          PKG=$(find /tmp/rccp -name '*.unitypackage' | head -1)
+          gzip -dc "$PKG" > /tmp/rccp/RCCP.tar
+          mkdir -p /tmp/rccp_pkg
+          tar xf /tmp/rccp/RCCP.tar -C /tmp/rccp_pkg
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+          root=Path('/tmp/rccp_pkg')
+          dest=Path('/home/user/Shshsh/Assets/Realistic Car Controller Pro')
+          rows=[]
+          staged=0
+          for d in root.iterdir():
+              pn=d/'pathname'
+              if not pn.exists(): continue
+              p=pn.read_text(errors='ignore').splitlines()[0].strip()
+              a=d/'asset'
+              rows.append((a.stat().st_size if a.exists() else 0,p))
+              if not p.startswith('Assets/Realistic Car Controller Pro/'): continue
+              rel=p[len('Assets/Realistic Car Controller Pro/'):]
+              wanted = (
+                  rel.startswith('Prefabs/Particles/') or
+                  rel.startswith('Textures/Particles/') or
+                  rel.startswith('Materials/Particle Materials/') or
+                  rel.startswith('Prefabs/Skidmarks/')
+              )
+              if not wanted: continue
+              if a.exists():
+                  target=dest/rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(a,target)
+                  m=d/'asset.meta'
+                  if m.exists(): shutil.copy2(m, Path(str(target)+'.meta'))
+                  staged+=1
+          rows.sort(reverse=True)
+          lines=['# RCC Pro package inventory','',f'Files: {len(rows)}','', '| KiB | Path |','|---:|---|']
+          for size,path in rows:
+              lines.append(f'| {size/1024:.1f} | `{path}` |')
+          Path('Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md').write_text('\n'.join(lines)+'\n')
+          print('staged',staged,'smoke files')
+          PY
+          du -sh 'Assets/Realistic Car Controller Pro'
+          grep -iE 'WheelSlip|BurnoutSmoke|Smoke.png' Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md | head -20
+
+      - name: Commit staged RCC Pro assets
+        run: |
+          set -euo pipefail
+          git config user.name 'Arena Agent'
+          git config user.email 'agent@users.noreply.github.com'
+          git add -f 'Assets/Realistic Car Controller Pro' Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md
+          if git diff --cached --quiet; then echo 'no change'; exit 0; fi
+          git commit -m "Stage RCC Pro smoke prefabs and textures from user archive"
           git push origin HEAD:"$GITHUB_REF_NAME"
