@@ -27,6 +27,9 @@ namespace CityDrive
             {
                 int index = WheelIndex(t.name);
                 if (index < 0) continue;
+                Renderer candidateRenderer = t.GetComponent<Renderer>();
+                Renderer currentRenderer = _wheels[index] != null ? _wheels[index].GetComponent<Renderer>() : null;
+                if (_wheels[index] != null && (currentRenderer != null || candidateRenderer == null)) continue;
                 _wheels[index] = t;
                 _baseRotations[index] = t.localRotation;
                 if (t.name.StartsWith("polySurface")) _spinAroundLocalZ = true;
