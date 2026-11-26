@@ -257,27 +257,43 @@ jobs:
               "$D/Realistic Car Controller Pro v1.44.0.rar.part03" \
               "$D/Realistic Car Controller Pro v1.44.0.rar.part04" \
               "$D/Realistic Car Controller Pro v1.44.0.rar.part05" > /tmp/rccp/RCCP.rar
-          sha256sum /tmp/rccp/RCCP.rar
+          echo "reconstructed: $(stat -c%s /tmp/rccp/RCCP.rar) bytes"
+          echo "78337d1bc70766ad5a6a6f4d8c4493c207b8851a06ea48442bf7dfb9190e98b4  /tmp/rccp/RCCP.rar" | sha256sum --check -
           7z x -y -o/tmp/rccp /tmp/rccp/RCCP.rar >/dev/null
-          PKG=$(find /tmp/rccp -name '*.unitypackage' | head -1)
-          gzip -dc "$PKG" > /tmp/rccp/RCCP.tar
+          PKG=$(find /tmp/rccp -type f -name '*.unitypackage' | head -1)
+          test -n "$PKG"
+          echo "unitypackage: $PKG ($(stat -c%s "$PKG") bytes)"
           mkdir -p /tmp/rccp_pkg
-          tar xf /tmp/rccp/RCCP.tar -C /tmp/rccp_pkg
+          if gzip -t "$PKG" 2>/dev/null; then
+            gzip -dc "$PKG" | tar xf - -C /tmp/rccp_pkg
+          else
+            tar xf "$PKG" -C /tmp/rccp_pkg
+          fi
           python3 - <<'PY'
           from pathlib import Path
           import shutil
           root=Path('/tmp/rccp_pkg')
-          dest=Path('/home/user/Shshsh/Assets/Realistic Car Controller Pro')
+          prefix='Assets/Realistic Car Controller Pro/'
+          dest=Path('Assets/Realistic Car Controller Pro')
+          src=Path('Tools/RCCP-Source')
           rows=[]
           staged=0
+          sources=0
           for d in root.iterdir():
               pn=d/'pathname'
               if not pn.exists(): continue
               p=pn.read_text(errors='ignore').splitlines()[0].strip()
               a=d/'asset'
               rows.append((a.stat().st_size if a.exists() else 0,p))
-              if not p.startswith('Assets/Realistic Car Controller Pro/'): continue
-              rel=p[len('Assets/Realistic Car Controller Pro/'):]
+              if not p.startswith(prefix): continue
+              rel=p[len(prefix):]
+              if rel.endswith('.cs') and a.exists():
+                  target=src/rel
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(a,target)
+                  m=d/'asset.meta'
+                  if m.exists(): shutil.copy2(m, Path(str(target)+'.meta'))
+                  sources+=1
               wanted = (
                   rel.startswith('Prefabs/Particles/') or
                   rel.startswith('Textures/Particles/') or
@@ -293,13 +309,16 @@ jobs:
                   if m.exists(): shutil.copy2(m, Path(str(target)+'.meta'))
                   staged+=1
           rows.sort(reverse=True)
-          lines=['# RCC Pro package inventory','',f'Files: {len(rows)}','', '| KiB | Path |','|---:|---|']
+          lines=['# RCC Pro v1.44 package inventory','',f'Files: {len(rows)}','',
+                 'Asset SHA-256: `78337d1bc70766ad5a6a6f4d8c4493c207b8851a06ea48442bf7dfb9190e98b4`','',
+                 '| KiB | Path |','|---:|---|']
           for size,path in rows:
               lines.append(f'| {size/1024:.1f} | `{path}` |')
           Path('Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md').write_text('\n'.join(lines)+'\n')
-          print('staged',staged,'smoke files')
+          print('staged',staged,'smoke files and',sources,'source scripts')
+          assert staged > 0 and sources > 0, 'Smoke assets or source scripts missing'
           PY
-          du -sh 'Assets/Realistic Car Controller Pro'
+          du -sh 'Assets/Realistic Car Controller Pro' Tools/RCCP-Source
           grep -iE 'WheelSlip|BurnoutSmoke|Smoke.png' Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md | head -20
 
       - name: Commit staged RCC Pro assets
@@ -307,7 +326,7 @@ jobs:
           set -euo pipefail
           git config user.name 'Arena Agent'
           git config user.email 'agent@users.noreply.github.com'
-          git add -f 'Assets/Realistic Car Controller Pro' Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md
+          git add -f 'Assets/Realistic Car Controller Pro' Tools/RCCP-Source Assets/ImportedAssets/UniStormDownload/RCCP-INVENTORY.md
           if git diff --cached --quiet; then echo 'no change'; exit 0; fi
           git commit -m "Stage RCC Pro smoke prefabs and textures from user archive"
           git push origin HEAD:"$GITHUB_REF_NAME"
