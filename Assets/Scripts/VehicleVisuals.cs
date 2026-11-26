@@ -80,8 +80,22 @@ namespace CityDrive
                 case "polySurface2": return 2;
                 case "WheelRR":
                 case "polySurface1": return 3;
-                default: return -1;
             }
+
+            // User-supplied GLBs use names such as wheel-fl-lr, wheelFR_3_14 or
+            // bone_wheel_FR_rotation. Ignore steering-wheel nodes explicitly.
+            string lower = name.ToLowerInvariant();
+            if (lower.Contains("steering")) return -1;
+            int at = lower.IndexOf("wheel");
+            if (at < 0) at = lower.IndexOf("tire");
+            if (at < 0) at = lower.IndexOf("tyre");
+            if (at < 0) return -1;
+            string tail = lower.Substring(at);
+            if (tail.Contains("fl")) return 0;
+            if (tail.Contains("fr")) return 1;
+            if (tail.Contains("rl")) return 2;
+            if (tail.Contains("rr")) return 3;
+            return -1;
         }
 
         /// <summary>Converts a steering angle around the car's up axis into wheel-local space.</summary>
