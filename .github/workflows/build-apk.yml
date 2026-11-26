@@ -302,7 +302,8 @@ jobs:
                   rel.startswith('Prefabs/Particles/') or
                   rel.startswith('Textures/Particles/') or
                   rel.startswith('Materials/Particle Materials/') or
-                  rel.startswith('Prefabs/Skidmarks/')
+                  rel.startswith('Prefabs/Skidmarks/') or
+                  rel.startswith('Textures/UI/')
               )
               if not wanted: continue
               if a.exists():
