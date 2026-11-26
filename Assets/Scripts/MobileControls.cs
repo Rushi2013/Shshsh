@@ -121,14 +121,19 @@ namespace CityDrive
         {
             // Old speed_gauge.png is gone. A clean square gauge is generated at runtime:
             // no stretched PNG, no white rectangle, no duplicate overlay.
+            // Prefer the supplied Realistic Car Controller speedometer artwork;
+            // the generated gauge remains a fallback if that asset is unavailable.
+            Sprite gaugeFace = UiTools.GetSprite("UI/RCC/Speedometer") ?? CreateGaugeSprite();
             Image gauge = UiTools.MakeImage(parent, "Speedometer",
                 new Vector2(0.5f, 0.895f), new Vector2(0.5f, 0.895f),
-                Color.white, CreateGaugeSprite());
+                Color.white, gaugeFace);
             gauge.rectTransform.sizeDelta = new Vector2(220f, 220f);
 
+            Sprite needleSprite = UiTools.GetSprite("UI/RCC/Needle");
             Image needle = UiTools.MakeImage(gauge.rectTransform, "Speed Needle",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Color(1f, 0.30f, 0.20f, 0.96f));
+                needleSprite != null ? Color.white : new Color(1f, 0.30f, 0.20f, 0.96f),
+                needleSprite);
             _needle = needle.rectTransform;
             _needle.sizeDelta = new Vector2(8f, 88f);
             _needle.pivot = new Vector2(0.5f, 0.08f);
