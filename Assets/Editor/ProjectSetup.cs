@@ -16,12 +16,6 @@ using UnityEngine.Rendering;
 /// </summary>
 public static class ProjectSetup
 {
-    [InitializeOnLoadMethod]
-    private static void OnEditorLoaded()
-    {
-        EnsureProject();
-    }
-
     private const string ScenePath = "Assets/Scenes/CityDrive.unity";
     private const string ApkPath = "build/Android/Android.apk";
 
@@ -253,7 +247,10 @@ public static class ProjectSetup
 
         if (!inBuildSettings)
         {
-            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            scenes.RemoveAll(item => item.path == ScenePath);
+            scenes.Add(new EditorBuildSettingsScene(ScenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
         }
     }
 

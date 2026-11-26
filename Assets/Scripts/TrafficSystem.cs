@@ -20,6 +20,7 @@ namespace CityDrive
             public int Node;
             public int Previous;
             public float Speed;
+            public float HeightOffset;
         }
 
         private readonly List<Agent> _agents = new List<Agent>();
@@ -89,7 +90,8 @@ namespace CityDrive
                     Player = player,
                     Node = index,
                     Previous = -1,
-                    Speed = 8.5f + (i % 5) * 1.1f
+                    Speed = 8.5f + (i % 5) * 1.1f,
+                    HeightOffset = car.transform.position.y - _nodes[index].y
                 });
             }
 
@@ -164,7 +166,12 @@ namespace CityDrive
                 Vector3 direction = target - agent.Transform.position;
                 direction.y = 0f;
                 float distance = direction.magnitude;
-                if (distance < 0.01f) continue;
+                if (distance < 0.01f)
+                {
+                    agent.Previous = agent.Node;
+                    agent.Node = next;
+                    continue;
+                }
                 direction /= distance;
 
                 float desired = agent.Speed;
@@ -182,14 +189,14 @@ namespace CityDrive
                     desired = Mathf.Min(desired, FollowingSpeed(agent.Transform.position, direction,
                         agent.Player.transform.position, desired));
 
-                if (distance < 6f)
+                if (distance < 0.5f)
                 {
                     agent.Previous = agent.Node;
                     agent.Node = next;
                 }
 
-                Vector3 position = agent.Transform.position + direction * desired * dt;
-                position.y = Mathf.Lerp(agent.Transform.position.y, target.y, dt * 4f);
+                Vector3 position = agent.Transform.position + direction * Mathf.Min(distance, desired * dt);
+                position.y = Mathf.Lerp(agent.Transform.position.y, target.y + agent.HeightOffset, dt * 4f);
                 agent.Body.MovePosition(position);
                 agent.Body.MoveRotation(Quaternion.Slerp(agent.Transform.rotation,
                     Quaternion.LookRotation(direction, Vector3.up), dt * 3.5f));

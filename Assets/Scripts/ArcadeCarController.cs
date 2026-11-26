@@ -18,6 +18,7 @@ namespace CityDrive
         [Header("Inputs (-1..1 / 0..1), written by MobileControls")]
         public float ThrottleInput;
         public float BrakeInput;
+        public float ReverseInput;
         public float SteerInput;
         public float HandbrakeInput;
 
@@ -113,7 +114,7 @@ namespace CityDrive
         public float EngineRpm => _rpm;
         public float EngineLoad => _engineLoad;
         public bool IsBurnout => _burnout;
-        public bool IsReversing => BrakeInput > 0.15f && ThrottleInput < 0.15f && ForwardSpeedKph < 5f;
+        public bool IsReversing => ReverseInput > 0.15f && ThrottleInput < 0.15f && ForwardSpeedKph < 5f;
         public float[] WheelSpinDegrees => _spinDegrees;
         public WheelTelemetry[] Wheels => _wheels;
 
@@ -313,8 +314,11 @@ namespace CityDrive
             // Brake + throttle is a burnout request, never mistaken for reverse.
             _burnout = ThrottleInput > 0.35f && BrakeInput > 0.35f &&
                        SpeedKph < burnoutMaxSpeedKph;
-            bool reversing = !_burnout && BrakeInput > 0.15f && ThrottleInput < 0.15f &&
+            bool reversing = !_burnout && ReverseInput > 0.15f && ThrottleInput < 0.15f &&
                              forwardSpeed < 1.5f;
+            // Reverse first brakes a moving-forward car; the brake pedal itself never selects reverse.
+            float serviceBrake = Mathf.Max(BrakeInput,
+                ReverseInput > 0.15f && forwardSpeed >= 1.5f ? ReverseInput : 0f);
 
             float speedFactor = Mathf.Clamp01(speed / 45f);
             float centreSteer = Mathf.Clamp(SteerInput, -1f, 1f) * maxSteerAngle *
@@ -422,9 +426,9 @@ namespace CityDrive
                 if (driven && ThrottleInput > 0.01f && !reversing && speed < maxSpeedKph / 3.6f)
                     driveTorque = torqueNm * gearMultiplier * ThrottleInput / drivenCount;
                 if (driven && reversing)
-                    driveTorque = -reverseTorque * BrakeInput / drivenCount;
+                    driveTorque = -reverseTorque * ReverseInput / drivenCount;
 
-                float brakeTorque = brakeForce * BrakeInput * 0.25f * wheelRadius;
+                float brakeTorque = brakeForce * serviceBrake * 0.25f * wheelRadius;
                 if (burnoutWheel) brakeTorque *= burnoutBrakeBias;
                 if (handbrakeRear) brakeTorque *= 0.12f;
                 float rollingTorque = longitudinalSpeed * rollingResistance * wheelRadius;
@@ -439,11 +443,12 @@ namespace CityDrive
                 float brakeSign = Mathf.Abs(omega) > 0.1f ? Mathf.Sign(omega) : Mathf.Sign(longitudinalSpeed);
                 float netTorque = driveTorque - reactionTorque -
                                   brakeSign * brakeTorque - rollingTorque;
+                float previousOmega = omega;
                 omega += netTorque / wheelInertia * dt;
 
-                // Do not let a locked wheel overshoot into instant reverse rotation.
-                if (BrakeInput > 0.05f && !burnoutWheel && !reversing &&
-                    Mathf.Sign(omega) != Mathf.Sign(omega + netTorque / wheelInertia * dt) &&
+                // Compare the actual pre/post step, not a second hypothetical step.
+                if (serviceBrake > 0.05f && !burnoutWheel && !reversing &&
+                    Mathf.Abs(previousOmega) > 0.001f && Mathf.Sign(previousOmega) != Mathf.Sign(omega) &&
                     Mathf.Abs(longitudinalSpeed) < 3f)
                     omega = 0f;
 

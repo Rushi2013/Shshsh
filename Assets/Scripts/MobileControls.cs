@@ -280,8 +280,9 @@ namespace CityDrive
             for (int i = 0; i < Input.touchCount; i++)
             {
                 Touch touch = Input.GetTouch(i);
-                Vector2 n = new Vector2(touch.position.x / Mathf.Max(1f, Screen.width),
-                    touch.position.y / Mathf.Max(1f, Screen.height));
+                Rect safe = Screen.safeArea;
+                Vector2 n = new Vector2((touch.position.x - safe.xMin) / Mathf.Max(1f, safe.width),
+                    (touch.position.y - safe.yMin) / Mathf.Max(1f, safe.height));
 
                 if (touch.fingerId == _steerTouchId ||
                     (_steerTouchId < 0 && touch.phase == TouchPhase.Began && InWheelZone(touch.position)))
@@ -317,8 +318,9 @@ namespace CityDrive
             {
                 _steerTouchId = -1;
                 Vector2 mouse = Input.mousePosition;
-                Vector2 n = new Vector2(mouse.x / Mathf.Max(1f, Screen.width),
-                    mouse.y / Mathf.Max(1f, Screen.height));
+                Rect safe = Screen.safeArea;
+                Vector2 n = new Vector2((mouse.x - safe.xMin) / Mathf.Max(1f, safe.width),
+                    (mouse.y - safe.yMin) / Mathf.Max(1f, safe.height));
                 if (Input.GetMouseButton(0))
                 {
                     if (InWheelZone(mouse))
@@ -391,7 +393,7 @@ namespace CityDrive
                 Time.unscaledDeltaTime * pedalResponse);
 
             Throttle = _throttleSmoothed;
-            Brake = Mathf.Max(_brakeSmoothed, _reverseSmoothed);
+            Brake = _brakeSmoothed;
             Reverse = _reverseSmoothed;
             Handbrake = _handbrakeSmoothed;
 
@@ -400,6 +402,7 @@ namespace CityDrive
                 Car.SteerInput = Steer;
                 Car.ThrottleInput = Throttle;
                 Car.BrakeInput = Brake;
+                Car.ReverseInput = Reverse;
                 if (_reverseSmoothed > 0.05f) Car.ThrottleInput = 0f;
                 Car.HandbrakeInput = Handbrake;
             }
