@@ -18,8 +18,8 @@ namespace CityDrive
 
         // UniStorm measures these in real minutes. The previous 2/2 setting made a
         // whole day pass in ~4 minutes; these values give a calm ~24 minute cycle.
-        private const float DayLengthMinutes = 14f;
-        private const float NightLengthMinutes = 10f;
+        private const int DayLengthMinutes = 14;
+        private const int NightLengthMinutes = 10;
 
         public static bool TryCreate(Transform player, Camera playerCamera)
         {

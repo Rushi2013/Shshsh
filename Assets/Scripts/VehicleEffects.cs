@@ -86,7 +86,7 @@ namespace CityDrive
             {
                 float[] rates = new float[systems.Length];
                 for (int i = 0; i < systems.Length; i++)
-                    rates[i] = Mathf.Max(1f, systems[i].emission.rateOverTime.scalar);
+                    rates[i] = Mathf.Max(1f, systems[i].emission.rateOverTime.constant);
                 return rates;
             }
 
