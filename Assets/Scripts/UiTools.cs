@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -70,6 +71,47 @@ namespace CityDrive
             text.color = color ?? new Color(1f, 1f, 1f, 0.94f);
             text.raycastTarget = false;
             return text;
+        }
+
+        /// <summary>
+        /// Asset-styled menu button. The sprite comes from the user's RCC Pro UI
+        /// texture set staged under Resources/UI/Menu; a plain tinted button is used
+        /// only if that texture is unavailable.
+        /// </summary>
+        public static Button MakeButton(Transform parent, string name, string label, Vector2 min, Vector2 max,
+            Action onClick, int fontSize = 30, Sprite sprite = null, Color? tint = null)
+        {
+            GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = min;
+            rect.anchorMax = max;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+
+            Image image = go.GetComponent<Image>();
+            image.sprite = sprite != null ? sprite : GetSprite("UI/Menu/ButtonSprite");
+            image.color = tint ?? new Color(0.10f, 0.17f, 0.26f, 0.94f);
+            image.raycastTarget = true;
+            image.type = image.sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+
+            Button button = go.GetComponent<Button>();
+            button.targetGraphic = image;
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 1f, 1f, 0.86f);
+            colors.pressedColor = new Color(0.72f, 0.86f, 1f, 1f);
+            colors.selectedColor = Color.white;
+            colors.disabledColor = new Color(0.45f, 0.48f, 0.52f, 0.6f);
+            colors.colorMultiplier = 1f;
+            colors.fadeDuration = 0.08f;
+            button.colors = colors;
+            if (onClick != null) button.onClick.AddListener(() => onClick());
+
+            if (!string.IsNullOrEmpty(label))
+                MakeText(go.transform, "Label", label, fontSize, Vector2.zero, Vector2.one,
+                    TextAnchor.MiddleCenter, new Color(0.96f, 0.98f, 1f, 0.98f));
+            return button;
         }
     }
 }

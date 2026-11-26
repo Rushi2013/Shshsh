@@ -13,8 +13,10 @@ namespace CityDrive
     public sealed class GarageController : MonoBehaviour
     {
         private readonly List<GameObject> _prefabs = new List<GameObject>();
+        private readonly Dictionary<string, Image> _cards = new Dictionary<string, Image>();
         private Action<GameObject, string> _onSelect;
         private GameObject _panel;
+        private Text _coinsText;
 
         public bool IsOpen => _panel != null && _panel.activeSelf;
 
@@ -34,11 +36,15 @@ namespace CityDrive
             panelRect.offsetMin = Vector2.zero;
             panelRect.offsetMax = Vector2.zero;
             Image panelImage = _panel.GetComponent<Image>();
-            panelImage.color = new Color(0.03f, 0.05f, 0.09f, 0.95f);
+            panelImage.color = new Color(0.03f, 0.05f, 0.09f, 0.97f);
+            panelImage.raycastTarget = true;
 
             UiTools.MakeText(_panel.transform, "Garage Title", "CAR GARAGE", 52,
-                new Vector2(0f, 0.88f), new Vector2(1f, 1f), TextAnchor.MiddleCenter,
+                new Vector2(0f, 0.88f), new Vector2(0.58f, 1f), TextAnchor.MiddleLeft,
                 new Color(1f, 0.84f, 0.32f));
+            _coinsText = UiTools.MakeText(_panel.transform, "Garage Coins", "COINS  " + MenuSettings.Coins.ToString("N0"), 30,
+                new Vector2(0.58f, 0.90f), new Vector2(0.82f, 1f), TextAnchor.MiddleRight,
+                new Color(1f, 0.90f, 0.42f));
             MakeButton(_panel.transform, "Close Garage", "CLOSE", new Vector2(0.84f, 0.90f),
                 new Vector2(0.98f, 0.98f), Close);
 
@@ -65,7 +71,9 @@ namespace CityDrive
             rect.anchorMax = max;
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
-            card.GetComponent<Image>().color = new Color(0.10f, 0.14f, 0.21f, 0.96f);
+            Image cardImage = card.GetComponent<Image>();
+            cardImage.color = new Color(0.10f, 0.14f, 0.21f, 0.96f);
+            _cards[prefab.name] = cardImage;
 
             Sprite thumbnail = RenderThumbnail(prefab);
             Image preview = UiTools.MakeImage(card.transform, "Preview",
@@ -131,6 +139,8 @@ namespace CityDrive
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
             Image image = go.GetComponent<Image>();
+            image.sprite = UiTools.GetSprite("UI/Menu/ButtonSprite");
+            image.type = image.sprite != null ? Image.Type.Sliced : Image.Type.Simple;
             image.color = new Color(0.12f, 0.62f, 0.86f, 0.96f);
             Button button = go.GetComponent<Button>();
             button.targetGraphic = image;
@@ -141,10 +151,19 @@ namespace CityDrive
 
         public void Open()
         {
-            if (_panel != null) _panel.SetActive(true);
+            if (_panel == null) return;
+            if (_coinsText != null) _coinsText.text = "COINS  " + MenuSettings.Coins.ToString("N0");
+            foreach (KeyValuePair<string, Image> pair in _cards)
+            {
+                bool selected = pair.Key == MenuSettings.SelectedCar;
+                if (pair.Value != null)
+                    pair.Value.color = selected ? new Color(0.16f, 0.42f, 0.28f, 0.98f)
+                                                : new Color(0.10f, 0.14f, 0.21f, 0.96f);
+            }
+            _panel.SetActive(true);
         }
 
-        private void Close()
+        public void Close()
         {
             if (_panel != null) _panel.SetActive(false);
         }

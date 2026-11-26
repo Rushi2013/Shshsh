@@ -102,6 +102,13 @@ namespace CityDrive
             Car.HornRequested -= Honk;
         }
 
+        /// <summary>Menu-controlled SFX level; applied by the next Update tick.</summary>
+        public void SetMasterVolume(float volume)
+        {
+            masterVolume = Mathf.Clamp01(volume);
+            if (_oneShot != null) _oneShot.volume = masterVolume * 0.8f;
+        }
+
         /// <summary>Enables the engine soundscape when gameplay begins.</summary>
         public void SetActive(bool active)
         {

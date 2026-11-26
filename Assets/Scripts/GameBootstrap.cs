@@ -16,6 +16,22 @@ namespace CityDrive
         private const string CityResource = "City/city";
         private const float ModelScale = 90f;
 
+        private static readonly Color[] BodyColors =
+        {
+            new Color(0.95f, 0.72f, 0.16f, 1f), new Color(0.16f, 0.55f, 0.92f, 1f),
+            new Color(0.78f, 0.14f, 0.18f, 1f), new Color(0.12f, 0.62f, 0.38f, 1f),
+            new Color(0.72f, 0.75f, 0.80f, 1f), new Color(0.09f, 0.11f, 0.18f, 1f)
+        };
+
+        public static string SelectedCarName
+        {
+            get
+            {
+                string saved = MenuSettings.SelectedCar;
+                return string.IsNullOrEmpty(saved) ? "BMW 330i xDrive" : saved;
+            }
+        }
+
         private IEnumerator Start()
         {
             Application.targetFrameRate = 60;
@@ -62,6 +78,18 @@ namespace CityDrive
             Vector3 spawn = city.FindSpawnPoint();
             Quaternion spawnRotation = city.SpawnRotation;
             GameObject car = SpawnCar(spawn, spawnRotation, carPrefab);
+            GameObject savedPrefab = FindSavedCarPrefab();
+            if (savedPrefab != null)
+            {
+                GameObject visual = SetPlayerVisual(car, savedPrefab);
+                VehicleVisuals savedVisuals = car.GetComponent<VehicleVisuals>();
+                if (savedVisuals != null && visual != null)
+                {
+                    savedVisuals.FindWheels(car.transform);
+                    savedVisuals.FindOriginalInteriorWheel(visual.transform);
+                }
+            }
+            ApplyBodyColor(car, MenuSettings.BodyColor);
             ArcadeCarController controller = car.GetComponent<ArcadeCarController>();
             controller.enabled = false;
 
@@ -278,6 +306,49 @@ namespace CityDrive
             VehicleLights.Create(car.transform, controller);
             ContactShadow.Create(car.transform); // subtle supplement to the real sun shadow
             return car;
+        }
+
+
+        /// <summary>Restores a garage selection made in a previous session.</summary>
+        private static GameObject FindSavedCarPrefab()
+        {
+            string saved = MenuSettings.SelectedCar;
+            if (string.IsNullOrEmpty(saved)) return null;
+            string[] folders = { "GarageCars", "TrafficCars" };
+            foreach (string folder in folders)
+            {
+                GameObject[] prefabs = Resources.LoadAll<GameObject>(folder);
+                if (prefabs == null) continue;
+                foreach (GameObject prefab in prefabs)
+                    if (prefab != null && prefab.name == saved) return prefab;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Applies a persisted paint choice to renderer instances only; shared project
+        /// materials and the original GLB assets are never modified on disk.
+        /// </summary>
+        public static void ApplyBodyColor(GameObject car, int index)
+        {
+            if (car == null) return;
+            Color color = BodyColors[Mathf.Clamp(index, 0, BodyColors.Length - 1)];
+            foreach (Renderer renderer in car.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                Material[] materials = renderer.materials;
+                bool changed = false;
+                foreach (Material material in materials)
+                {
+                    if (material == null) continue;
+                    string name = material.name.ToLowerInvariant();
+                    if (!(name.Contains("body") || name.Contains("paint") ||
+                          name.Contains("color_a05") || name.Contains("_default"))) continue;
+                    if (material.HasProperty("_Color")) material.color = color;
+                    changed = true;
+                }
+                if (changed) renderer.materials = materials;
+            }
         }
 
         /// <summary>
