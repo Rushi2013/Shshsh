@@ -79,7 +79,7 @@ namespace CityDrive
                 VehicleVisuals savedVisuals = car.GetComponent<VehicleVisuals>();
                 if (savedVisuals != null && visual != null)
                 {
-                    savedVisuals.FindWheels(car.transform);
+                    savedVisuals.FindWheels(visual.transform);
                     savedVisuals.FindOriginalInteriorWheel(visual.transform);
                 }
             }

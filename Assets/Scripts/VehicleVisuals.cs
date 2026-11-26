@@ -38,6 +38,8 @@ namespace CityDrive
 
         public void FindWheels(Transform modelRoot)
         {
+            for (int i = 0; i < _wheels.Length; i++) _wheels[i] = null;
+            _spinAroundLocalZ = false;
             if (modelRoot == null) return;
             foreach (Transform t in modelRoot.GetComponentsInChildren<Transform>(true))
             {

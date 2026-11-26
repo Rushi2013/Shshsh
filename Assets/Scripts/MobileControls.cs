@@ -283,10 +283,10 @@ namespace CityDrive
                 Vector2 n = new Vector2(touch.position.x / Mathf.Max(1f, Screen.width),
                     touch.position.y / Mathf.Max(1f, Screen.height));
 
-                if (InWheelZone(touch.position))
+                if (touch.fingerId == _steerTouchId ||
+                    (_steerTouchId < 0 && touch.phase == TouchPhase.Began && InWheelZone(touch.position)))
                 {
-                    if (_steerTouchId < 0 && touch.phase != TouchPhase.Ended &&
-                        touch.phase != TouchPhase.Canceled)
+                    if (_steerTouchId < 0)
                     {
                         _steerTouchId = touch.fingerId;
                         _lastSteerAngle = AngleAroundWheel(touch.position);
@@ -315,6 +315,7 @@ namespace CityDrive
 
             if (Input.touchCount == 0)
             {
+                _steerTouchId = -1;
                 Vector2 mouse = Input.mousePosition;
                 Vector2 n = new Vector2(mouse.x / Mathf.Max(1f, Screen.width),
                     mouse.y / Mathf.Max(1f, Screen.height));

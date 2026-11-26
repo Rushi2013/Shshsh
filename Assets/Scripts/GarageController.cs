@@ -17,6 +17,7 @@ namespace CityDrive
 
         private readonly List<GameObject> _prefabs = new List<GameObject>();
         private readonly List<GameObject> _cards = new List<GameObject>();
+        private readonly Dictionary<GameObject, Sprite> _thumbnails = new Dictionary<GameObject, Sprite>();
         private Action<GameObject, string> _onSelect;
         private GameObject _panel;
         private Text _coinsText;
@@ -102,7 +103,11 @@ namespace CityDrive
                     ? new Color(0.12f, 0.34f, 0.24f, 0.98f)
                     : new Color(0.09f, 0.13f, 0.20f, 0.98f);
 
-                Sprite thumbnail = RenderThumbnail(prefab);
+                if (!_thumbnails.TryGetValue(prefab, out Sprite thumbnail) || thumbnail == null)
+                {
+                    thumbnail = RenderThumbnail(prefab);
+                    _thumbnails[prefab] = thumbnail;
+                }
                 Image preview = UiTools.MakeImage(card.transform, "Preview",
                     new Vector2(0.02f, 0.24f), new Vector2(0.98f, 0.98f), Color.white, thumbnail);
                 preview.preserveAspect = true;
@@ -126,6 +131,7 @@ namespace CityDrive
             GameObject temp = UnityEngine.Object.Instantiate(prefab, new Vector3(1000f, 0f, 0f), Quaternion.identity);
             Bounds bounds = new Bounds(temp.transform.position, Vector3.one);
             bool found = false;
+            List<Material> temporaryMaterials = new List<Material>();
             foreach (Renderer renderer in temp.GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null || renderer.bounds.size == Vector3.zero) continue;
@@ -142,13 +148,19 @@ namespace CityDrive
                     Material source = materials[m];
                     if (source == null || source.shader == null || !source.shader.isSupported) continue;
                     Material promoted = new Material(standard);
+                    temporaryMaterials.Add(promoted);
                     if (source.HasProperty("_MainTex")) promoted.mainTexture = source.mainTexture;
                     if (source.HasProperty("_Color")) promoted.color = source.color;
                     materials[m] = promoted;
                 }
                 renderer.sharedMaterials = materials;
             }
-            if (!found) return null;
+            if (!found)
+            {
+                UnityEngine.Object.Destroy(temp);
+                foreach (Material material in temporaryMaterials) UnityEngine.Object.Destroy(material);
+                return null;
+            }
 
             float radius = Mathf.Max(2f, bounds.size.magnitude * 0.5f);
             Vector3 centre = bounds.center;
@@ -184,7 +196,20 @@ namespace CityDrive
             RenderTexture.ReleaseTemporary(rt);
             UnityEngine.Object.Destroy(cameraObject);
             UnityEngine.Object.Destroy(temp);
+            foreach (Material material in temporaryMaterials) UnityEngine.Object.Destroy(material);
             return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        private void OnDestroy()
+        {
+            foreach (Sprite sprite in _thumbnails.Values)
+            {
+                if (sprite == null) continue;
+                Texture texture = sprite.texture;
+                Destroy(sprite);
+                if (texture != null) Destroy(texture);
+            }
+            _thumbnails.Clear();
         }
 
         public void Open()

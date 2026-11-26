@@ -32,6 +32,7 @@ namespace CityDrive
         private GarageController _garage;
         private Text _carNameText;
         private Text _coinsText;
+        private Text _walletBalance;
         private Text _bonusText;
         private GameObject _settingsPanel;
         private GameObject _customizePanel;
@@ -447,7 +448,7 @@ namespace CityDrive
         private void BuildWalletPanel()
         {
             _walletPanel = MakePanel("Wallet Panel", "WALLET");
-            UiTools.MakeText(_walletPanel.transform, "Wallet Balance", MenuSettings.Coins.ToString("N0"), 72,
+            _walletBalance = UiTools.MakeText(_walletPanel.transform, "Wallet Balance", MenuSettings.Coins.ToString("N0"), 72,
                 new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.68f), TextAnchor.MiddleCenter,
                 new Color(1f, 0.90f, 0.42f));
             _bonusText = UiTools.MakeText(_walletPanel.transform, "Bonus Status",
@@ -462,7 +463,8 @@ namespace CityDrive
         private void ClaimBonus()
         {
             bool claimed = MenuSettings.ClaimDailyBonus(250);
-            _coinsText.text = MenuSettings.Coins.ToString("N0");
+            if (_coinsText != null) _coinsText.text = MenuSettings.Coins.ToString("N0");
+            if (_walletBalance != null) _walletBalance.text = MenuSettings.Coins.ToString("N0");
             if (_bonusText != null)
                 _bonusText.text = claimed ? "BONUS CLAIMED TODAY" : "ALREADY CLAIMED";
             if (_garage != null) _garage.RefreshCoins();
@@ -497,6 +499,8 @@ namespace CityDrive
         private void OpenWallet()
         {
             ClosePanels();
+            if (_walletBalance != null) _walletBalance.text = MenuSettings.Coins.ToString("N0");
+            if (_bonusText != null) _bonusText.text = MenuSettings.BonusAvailable ? "DAILY BONUS READY" : "BONUS CLAIMED TODAY";
             _walletPanel.SetActive(true);
         }
 
@@ -531,7 +535,7 @@ namespace CityDrive
             VehicleVisuals visuals = _car.GetComponent<VehicleVisuals>();
             if (visuals != null)
             {
-                visuals.FindWheels(_car.transform);
+                visuals.FindWheels(visual.transform);
                 visuals.FindOriginalInteriorWheel(visual.transform);
                 visuals.SetSpinEnabled(false); // freeze skinned wheel bones in showroom
             }

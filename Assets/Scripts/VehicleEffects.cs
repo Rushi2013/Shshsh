@@ -42,19 +42,23 @@ namespace CityDrive
             public ParticleSystem[] BurnoutSystems;
             public float[] SlipRates;
             public float[] BurnoutRates;
+            private GameObject _slipRoot;
+            private GameObject _burnoutRoot;
 
             public void Configure(GameObject asphalt, GameObject burnout)
             {
-                SlipSystems = Prepare(asphalt);
-                BurnoutSystems = Prepare(burnout);
+                SlipSystems = Prepare(asphalt, out _slipRoot);
+                BurnoutSystems = Prepare(burnout, out _burnoutRoot);
                 SlipRates = Rates(SlipSystems);
                 BurnoutRates = Rates(BurnoutSystems);
             }
 
-            private static ParticleSystem[] Prepare(GameObject prefab)
+            private static ParticleSystem[] Prepare(GameObject prefab, out GameObject root)
             {
+                root = null;
                 if (prefab == null) return new ParticleSystem[0];
                 GameObject instance = UnityEngine.Object.Instantiate(prefab);
+                root = instance;
                 instance.name = prefab.name + " (RCCP)";
                 instance.transform.SetParent(null, true);
 
@@ -115,6 +119,12 @@ namespace CityDrive
                 }
             }
 
+            public void DestroyInstances()
+            {
+                if (_slipRoot != null) UnityEngine.Object.Destroy(_slipRoot);
+                if (_burnoutRoot != null) UnityEngine.Object.Destroy(_burnoutRoot);
+            }
+
             public void Clear()
             {
                 Clear(SlipSystems);
@@ -143,6 +153,7 @@ namespace CityDrive
         private int _cursor;
         private Mesh _quad;
         private Material _markMaterial;
+        private GameObject _markRoot;
 
         private void Start()
         {
@@ -172,11 +183,12 @@ namespace CityDrive
                 _markMaterial.renderQueue = 2990;
             }
 
-            int count = Mathf.Min(maxMarks, _marks.Length);
+            _markRoot = new GameObject("World Skid Marks");
+            int count = Mathf.Clamp(maxMarks, 0, _marks.Length);
             for (int i = 0; i < count; i++)
             {
                 GameObject go = new GameObject("Skid Mark " + i);
-                go.transform.SetParent(transform, false);
+                go.transform.SetParent(_markRoot.transform, false);
                 go.SetActive(false);
                 MeshFilter filter = go.AddComponent<MeshFilter>();
                 filter.sharedMesh = _quad;
@@ -213,6 +225,15 @@ namespace CityDrive
                 _smokeIntensity[i] = 0f;
                 _hasLastPoint[i] = false;
             }
+        }
+
+        private void OnDestroy()
+        {
+            foreach (WheelSmoke smoke in _smoke)
+                if (smoke != null) smoke.DestroyInstances();
+            if (_markRoot != null) Destroy(_markRoot);
+            if (_quad != null) Destroy(_quad);
+            if (_markMaterial != null) Destroy(_markMaterial);
         }
 
         private void Update()
