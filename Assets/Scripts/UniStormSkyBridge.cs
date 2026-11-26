@@ -16,6 +16,11 @@ namespace CityDrive
         private const string MobilePrefabResource = "Systems/Resources/UniStorm Mobile System";
         private const string FallbackSunName = "CityDrive Sun";
 
+        // UniStorm measures these in real minutes. The previous 2/2 setting made a
+        // whole day pass in ~4 minutes; these values give a calm ~24 minute cycle.
+        private const float DayLengthMinutes = 14f;
+        private const float NightLengthMinutes = 10f;
+
         public static bool TryCreate(Transform player, Camera playerCamera)
         {
             if (player == null || playerCamera == null)
@@ -64,8 +69,8 @@ namespace CityDrive
             system.TimeFlow = UniStormSystem.EnableFeature.Enabled;
             system.RealWorldTime = UniStormSystem.EnableFeature.Disabled;
             system.StartingHour = 8;
-            system.DayLength = 2;
-            system.NightLength = 2;
+            system.DayLength = DayLengthMinutes;
+            system.NightLength = NightLengthMinutes;
             ApplyDayNightColours(system);
 
             DisableFallbackSun();
