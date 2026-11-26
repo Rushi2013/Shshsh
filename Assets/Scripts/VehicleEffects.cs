@@ -54,7 +54,7 @@ namespace CityDrive
             private static ParticleSystem[] Prepare(GameObject prefab)
             {
                 if (prefab == null) return new ParticleSystem[0];
-                GameObject instance = Instantiate(prefab);
+                GameObject instance = UnityEngine.Object.Instantiate(prefab);
                 instance.name = prefab.name + " (RCCP)";
                 instance.transform.SetParent(null, true);
 
