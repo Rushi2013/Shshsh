@@ -9,6 +9,10 @@ on:
         description: "Only copy the latest APK into the repo for fast download"
         type: boolean
         default: false
+      inspect_rcc:
+        description: "Inspect the uploaded Realistic Car Controller RAR and commit an inventory"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -16,7 +20,7 @@ permissions:
 
 jobs:
   build-apk:
-    if: ${{ !inputs.host_only }}
+    if: ${{ !inputs.host_only && !inputs.inspect_rcc }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout project
@@ -77,7 +81,7 @@ jobs:
           files: build/**/*.apk
 
   host-apk:
-    if: ${{ inputs.host_only }}
+    if: ${{ inputs.host_only && !inputs.inspect_rcc }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -101,3 +105,61 @@ jobs:
           git add -f apk/CityDrive.apk
           git commit -m "Host CityDrive APK for fast raw download" || true
           git push
+
+  inspect-rcc:
+    if: ${{ inputs.inspect_rcc }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install RAR tool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full
+
+      - name: Reassemble and inventory RCC
+        run: |
+          set -euo pipefail
+          D='Assets/ImportedAssets/UniStormDownload'
+          mkdir -p /tmp/rcc
+          cat "$D/Realistic Car Controller v3.70.rar.part01" \
+              "$D/Realistic Car Controller v3.70.rar.part02" \
+              "$D/Realistic Car Controller v3.70.rar.part03" \
+              "$D/Realistic Car Controller v3.70.rar.part04" \
+              "$D/Realistic Car Controller v3.70.rar.part05" \
+              "$D/Realistic Car Controller v3.70.rar.part06" \
+              "$D/Realistic Car Controller v3.70.rar.part07" > /tmp/rcc/RCC.rar
+          7z x -y -o/tmp/rcc /tmp/rcc/RCC.rar >/dev/null
+          PKG=$(find /tmp/rcc -name '*.unitypackage' | head -1)
+          gzip -dc "$PKG" > /tmp/rcc/RCC.tar
+          mkdir -p /tmp/rcc_pkg
+          tar xf /tmp/rcc/RCC.tar -C /tmp/rcc_pkg
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/rcc_pkg')
+          rows=[]
+          for d in root.iterdir():
+              pn=d/'pathname'
+              a=d/'asset'
+              if not pn.exists(): continue
+              p=pn.read_text(errors='ignore').splitlines()[0].strip()
+              rows.append((a.stat().st_size if a.exists() else 0,p))
+          rows.sort(reverse=True)
+          lines=['# Realistic Car Controller v3.70 package inventory','',f'Files: {len(rows)}','', '| KiB | Path |','|---:|---|']
+          for s,p in rows:
+              lines.append(f'| {s/1024:.1f} | `{p}` |')
+          Path('Assets/ImportedAssets/UniStormDownload/RCC-INVENTORY.md').write_text('\n'.join(lines)+'\n')
+          print('inventory entries',len(rows))
+          PY
+          head -30 Assets/ImportedAssets/UniStormDownload/RCC-INVENTORY.md
+
+      - name: Commit inventory
+        run: |
+          set -euo pipefail
+          git config user.name 'Arena Agent'
+          git config user.email 'agent@users.noreply.github.com'
+          git add -f Assets/ImportedAssets/UniStormDownload/RCC-INVENTORY.md
+          if git diff --cached --quiet; then echo 'no change'; exit 0; fi
+          git commit -m "Add RCC package inventory"
+          git push origin HEAD:"$GITHUB_REF_NAME"
