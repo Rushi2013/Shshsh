@@ -16,6 +16,13 @@ namespace CityDrive
             Sprite cached;
             if (Sprites.TryGetValue(resource, out cached) && cached != null) return cached;
 
+            Sprite imported = Resources.Load<Sprite>(resource);
+            if (imported != null)
+            {
+                Sprites[resource] = imported;
+                return imported;
+            }
+
             Texture2D texture = Resources.Load<Texture2D>(resource);
             if (texture == null) return null;
 
@@ -78,6 +85,28 @@ namespace CityDrive
         /// texture set staged under Resources/UI/Menu; a plain tinted button is used
         /// only if that texture is unavailable.
         /// </summary>
+        /// <summary>Button whose artwork already contains its label (Car Menu UI kit).</summary>
+        public static Button MakeAssetButton(Transform parent, string name, string resource,
+            Vector2 min, Vector2 max, Action onClick, bool interactable = true)
+        {
+            Image image = MakeImage(parent, name, min, max, Color.white, GetSprite(resource));
+            image.preserveAspect = true;
+            image.type = Image.Type.Simple;
+            image.raycastTarget = true;
+            Button button = image.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.interactable = interactable;
+            ColorBlock colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1f, 0.96f, 0.86f, 1f);
+            colors.pressedColor = new Color(0.82f, 0.90f, 1f, 1f);
+            colors.disabledColor = new Color(0.45f, 0.45f, 0.48f, 0.55f);
+            colors.fadeDuration = 0.08f;
+            button.colors = colors;
+            if (onClick != null) button.onClick.AddListener(() => onClick());
+            return button;
+        }
+
         public static Button MakeButton(Transform parent, string name, string label, Vector2 min, Vector2 max,
             Action onClick, int fontSize = 30, Sprite sprite = null, Color? tint = null)
         {

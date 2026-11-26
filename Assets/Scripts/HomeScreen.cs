@@ -7,13 +7,16 @@ using UnityEngine.UI;
 namespace CityDrive
 {
     /// <summary>
-    /// Main menu shown before the open-world drive. The 3D showroom and the real
-    /// PLAY transition are preserved; the old flat Play/Garage UI was replaced by
-    /// an asset-styled menu with working Play, Garage, Customize, Settings,
-    /// Credits, Quit and a local coins wallet.
+    /// Car Menu UI v2 based main screen. The supplied full-screen artwork and
+    /// baked-label buttons are used directly from Resources; the 3D showroom car
+    /// is rendered into a dedicated RenderTexture so it can sit on the right of
+    /// the menu without being covered by the background image. All existing
+    /// gameplay transitions, car selection and save data are preserved.
     /// </summary>
     public sealed class HomeScreen : MonoBehaviour
     {
+        private const string MenuRoot = "UI/CarMenu/";
+
         private CityBuilder _city;
         private GameObject _car;
         private ArcadeCarController _controller;
@@ -34,9 +37,12 @@ namespace CityDrive
         private GameObject _customizePanel;
         private GameObject _creditsPanel;
         private GameObject _quitPanel;
+        private GameObject _walletPanel;
         private Text _masterValue;
         private Text _sfxValue;
-        private Text _qualityValue;
+        private Text _paintName;
+        private Camera _previewCamera;
+        private RenderTexture _previewTexture;
         private bool _playing;
         private float _showroomYaw;
         private readonly Vector3 _showroomPosition = new Vector3(0f, 0.72f, 0f);
@@ -74,12 +80,10 @@ namespace CityDrive
 
             _showroomYaw = 180f;
             _car.transform.SetPositionAndRotation(_showroomPosition, Quaternion.Euler(0f, _showroomYaw, 0f));
-            _camera.transform.position = new Vector3(0f, 2.25f, -7.6f);
-            _camera.transform.LookAt(new Vector3(0f, 0.88f, 0f));
-            _camera.fieldOfView = 52f;
-            _camera.farClipPlane = 200f;
+            if (_camera != null) _camera.enabled = false;
 
             BuildShowroom();
+            BuildPreviewCamera();
             BuildUi();
         }
 
@@ -101,21 +105,33 @@ namespace CityDrive
             ring.transform.position = new Vector3(0f, -0.24f, 0f);
             SetMaterial(ring, new Color(0.10f, 0.58f, 0.82f), null);
 
-            Texture2D showroomTexture = Resources.Load<Texture2D>("UI/showroom_bg");
-            if (showroomTexture != null)
-            {
-                GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                backdrop.name = "Showroom Backdrop";
-                backdrop.transform.SetParent(_showroom.transform, false);
-                backdrop.transform.position = new Vector3(0f, 2.6f, 11f);
-                backdrop.transform.localScale = new Vector3(26f, 13f, 1f);
-                backdrop.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
-                SetMaterial(backdrop, Color.white, showroomTexture);
-            }
-
             AddStudioLight("Key Light", new Vector3(4f, 7f, -5f), new Color(1f, 0.94f, 0.84f), 4.2f, true);
             AddStudioLight("Fill Light", new Vector3(-5f, 4f, 2f), new Color(0.60f, 0.76f, 1f), 2.1f, false);
             AddStudioLight("Rim Light", new Vector3(1f, 5f, 7f), new Color(0.86f, 0.92f, 1f), 2.6f, false);
+        }
+
+        private void BuildPreviewCamera()
+        {
+            _previewTexture = new RenderTexture(1024, 1024, 24, RenderTextureFormat.ARGB32)
+            {
+                name = "Menu Car Preview",
+                useMipMap = false,
+                filterMode = FilterMode.Bilinear
+            };
+            _previewTexture.Create();
+
+            GameObject cameraObject = new GameObject("Menu Car Preview Camera", typeof(Camera));
+            cameraObject.transform.SetParent(transform, false);
+            _previewCamera = cameraObject.GetComponent<Camera>();
+            _previewCamera.clearFlags = CameraClearFlags.SolidColor;
+            _previewCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+            _previewCamera.fieldOfView = 52f;
+            _previewCamera.nearClipPlane = 0.1f;
+            _previewCamera.farClipPlane = 200f;
+            _previewCamera.allowHDR = true;
+            _previewCamera.targetTexture = _previewTexture;
+            cameraObject.transform.position = new Vector3(0f, 2.25f, -7.6f);
+            cameraObject.transform.LookAt(new Vector3(0f, 0.88f, 0f));
         }
 
         private void AddStudioLight(string name, Vector3 position, Color color, float intensity, bool shadows)
@@ -150,7 +166,7 @@ namespace CityDrive
             if (FindObjectOfType<EventSystem>() == null)
                 new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
 
-            _canvasObject = new GameObject("Main Menu UI", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            _canvasObject = new GameObject("Car Menu UI v2", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             _canvasObject.transform.SetParent(transform, false);
             Canvas canvas = _canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -169,101 +185,108 @@ namespace CityDrive
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
-            Sprite buttonSprite = UiTools.GetSprite("UI/Menu/ButtonSprite");
-            UiTools.MakeImage(_canvasObject.transform, "Top Fade", new Vector2(0f, 0.86f), new Vector2(1f, 1f),
-                new Color(0.02f, 0.04f, 0.08f, 0.72f));
-            UiTools.MakeText(_canvasObject.transform, "Game Title", "CITY DRIVE", 78,
-                new Vector2(0.03f, 0.89f), new Vector2(0.62f, 0.98f), TextAnchor.MiddleLeft,
-                new Color(1f, 0.84f, 0.30f));
-            _carNameText = UiTools.MakeText(_canvasObject.transform, "Selected Car", GameBootstrap.SelectedCarName, 32,
-                new Vector2(0.03f, 0.81f), new Vector2(0.62f, 0.89f), TextAnchor.MiddleLeft,
-                new Color(0.72f, 0.90f, 1f));
+            Image background = UiTools.MakeImage(_canvasObject.transform, "Menu Background", Vector2.zero, Vector2.one,
+                Color.white, UiTools.GetSprite(MenuRoot + "Background/MainMenu_Background"));
+            AspectRatioFitter fitter = background.gameObject.AddComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            fitter.aspectRatio = 1672f / 941f;
+
+            UiTools.MakeImage(_canvasObject.transform, "Left Shade", new Vector2(0f, 0f), new Vector2(0.38f, 1f),
+                new Color(0.02f, 0.04f, 0.08f, 0.52f));
+
+            RawImage preview = new GameObject("3D Car Preview", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage)).GetComponent<RawImage>();
+            preview.transform.SetParent(_canvasObject.transform, false);
+            RectTransform previewRect = preview.rectTransform;
+            previewRect.anchorMin = new Vector2(0.40f, 0.09f);
+            previewRect.anchorMax = new Vector2(0.99f, 0.90f);
+            previewRect.offsetMin = Vector2.zero;
+            previewRect.offsetMax = Vector2.zero;
+            preview.texture = _previewTexture;
+            preview.color = Color.white;
+            preview.raycastTarget = false;
+
+            UiTools.MakeText(_canvasObject.transform, "Game Title", "CITY DRIVE", 74,
+                new Vector2(0.03f, 0.88f), new Vector2(0.38f, 0.98f), TextAnchor.MiddleLeft,
+                new Color(1f, 0.86f, 0.36f));
+            _carNameText = UiTools.MakeText(_canvasObject.transform, "Selected Car", GameBootstrap.SelectedCarName, 30,
+                new Vector2(0.03f, 0.82f), new Vector2(0.38f, 0.89f), TextAnchor.MiddleLeft,
+                new Color(0.78f, 0.91f, 1f));
+
+            UiTools.MakeAssetButton(_canvasObject.transform, "Play Button", MenuRoot + "Main_Buttons/Button_PLAY",
+                new Vector2(0.03f, 0.64f), new Vector2(0.23f, 0.74f), Play);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Garage Button", MenuRoot + "Main_Buttons/Button_GARAGE",
+                new Vector2(0.03f, 0.54f), new Vector2(0.23f, 0.64f), OpenGarage);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Customize Button", MenuRoot + "Main_Buttons/Button_CUSTOMIZE",
+                new Vector2(0.03f, 0.44f), new Vector2(0.23f, 0.54f), OpenCustomize);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Settings Button", MenuRoot + "Main_Buttons/Button_SETTINGS",
+                new Vector2(0.03f, 0.34f), new Vector2(0.23f, 0.44f), OpenSettings);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Credits Button", MenuRoot + "Main_Buttons/Button_CREDITS",
+                new Vector2(0.03f, 0.24f), new Vector2(0.23f, 0.34f), OpenCredits);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Exit Button", MenuRoot + "Main_Buttons/Button_EXIT",
+                new Vector2(0.03f, 0.14f), new Vector2(0.23f, 0.24f), AskQuit);
+            UiTools.MakeAssetButton(_canvasObject.transform, "Store Button (disabled)", MenuRoot + "Main_Buttons/Button_STORE",
+                new Vector2(0.03f, 0.04f), new Vector2(0.23f, 0.14f), null, false);
+            UiTools.MakeText(_canvasObject.transform, "Store Note", "STORE — COMING SOON", 22,
+                new Vector2(0.24f, 0.05f), new Vector2(0.42f, 0.13f), TextAnchor.MiddleLeft,
+                new Color(0.78f, 0.84f, 0.92f));
 
             BuildCoinBadge();
 
-            UiTools.MakeImage(_canvasObject.transform, "Button Rail", new Vector2(0.70f, 0.06f),
-                new Vector2(0.97f, 0.78f), new Color(0.03f, 0.06f, 0.11f, 0.68f));
-
-            UiTools.MakeButton(_canvasObject.transform, "Play Button", "PLAY / DRIVE",
-                new Vector2(0.72f, 0.60f), new Vector2(0.95f, 0.74f), Play, 36, buttonSprite,
-                new Color(0.95f, 0.68f, 0.20f, 0.98f));
-            UiTools.MakeButton(_canvasObject.transform, "Garage Button", "GARAGE",
-                new Vector2(0.72f, 0.47f), new Vector2(0.95f, 0.58f), OpenGarage, 28, buttonSprite);
-            UiTools.MakeButton(_canvasObject.transform, "Customize Button", "CUSTOMIZE",
-                new Vector2(0.72f, 0.35f), new Vector2(0.95f, 0.46f), OpenCustomize, 28, buttonSprite);
-            UiTools.MakeButton(_canvasObject.transform, "Settings Button", "SETTINGS",
-                new Vector2(0.72f, 0.23f), new Vector2(0.83f, 0.34f), OpenSettings, 24, buttonSprite);
-            UiTools.MakeButton(_canvasObject.transform, "Credits Button", "CREDITS",
-                new Vector2(0.84f, 0.23f), new Vector2(0.95f, 0.34f), OpenCredits, 24, buttonSprite);
-            UiTools.MakeButton(_canvasObject.transform, "Quit Button", "QUIT",
-                new Vector2(0.72f, 0.10f), new Vector2(0.95f, 0.21f), AskQuit, 24, buttonSprite,
-                new Color(0.32f, 0.12f, 0.14f, 0.96f));
-
-            UiTools.MakeText(_canvasObject.transform, "Menu Hint",
-                "OPEN WORLD   •   DRIFT SMOKE   •   3 CAMERAS", 26,
-                new Vector2(0.03f, 0.05f), new Vector2(0.68f, 0.12f), TextAnchor.MiddleLeft,
-                new Color(0.84f, 0.88f, 0.94f));
-
             _garage = gameObject.AddComponent<GarageController>();
             _garage.Build(_canvasObject.transform, OnCarSelected);
-            BuildSettingsPanel(buttonSprite);
-            BuildCustomizePanel(buttonSprite);
-            BuildCreditsPanel(buttonSprite);
-            BuildQuitPanel(buttonSprite);
+            BuildSettingsPanel();
+            BuildCustomizePanel();
+            BuildCreditsPanel();
+            BuildQuitPanel();
+            BuildWalletPanel();
         }
 
         private void BuildCoinBadge()
         {
-            GameObject badge = UiTools.MakeImage(_canvasObject.transform, "Coins Panel",
-                new Vector2(0.78f, 0.88f), new Vector2(0.97f, 0.98f),
-                new Color(0.08f, 0.07f, 0.04f, 0.92f)).gameObject;
-            UiTools.MakeText(badge.transform, "Coins Title", "COINS", 22,
-                new Vector2(0.02f, 0.52f), new Vector2(0.48f, 0.96f), TextAnchor.MiddleLeft,
-                new Color(0.91f, 0.78f, 0.36f));
-            _coinsText = UiTools.MakeText(badge.transform, "Coins Value", MenuSettings.Coins.ToString("N0"), 38,
-                new Vector2(0.48f, 0.08f), new Vector2(0.96f, 0.92f), TextAnchor.MiddleRight,
+            Image coinIcon = UiTools.MakeImage(_canvasObject.transform, "Coin Icon",
+                new Vector2(0.82f, 0.89f), new Vector2(0.87f, 0.98f), Color.white,
+                UiTools.GetSprite(MenuRoot + "Icons/Icon_Coins"));
+            coinIcon.preserveAspect = true;
+
+            UiTools.MakeAssetButton(_canvasObject.transform, "Coins Button", MenuRoot + "Main_Buttons/Button_COINS",
+                new Vector2(0.72f, 0.80f), new Vector2(0.92f, 0.90f), OpenWallet);
+            _coinsText = UiTools.MakeText(_canvasObject.transform, "Coins Value", MenuSettings.Coins.ToString("N0"), 34,
+                new Vector2(0.76f, 0.90f), new Vector2(0.94f, 0.98f), TextAnchor.MiddleRight,
                 new Color(1f, 0.90f, 0.42f));
-
-            UiTools.MakeButton(_canvasObject.transform, "Daily Bonus Button", "DAILY +250",
-                new Vector2(0.70f, 0.79f), new Vector2(0.90f, 0.87f), ClaimBonus, 22,
-                UiTools.GetSprite("UI/Menu/ButtonFade"), new Color(0.18f, 0.34f, 0.22f, 0.96f));
-            _bonusText = UiTools.MakeText(_canvasObject.transform, "Bonus Status",
-                MenuSettings.BonusAvailable ? "READY" : "CLAIMED TODAY", 20,
-                new Vector2(0.70f, 0.75f), new Vector2(0.90f, 0.80f), TextAnchor.MiddleLeft,
-                new Color(0.64f, 0.94f, 0.70f));
-        }
-
-        private void ClaimBonus()
-        {
-            bool claimed = MenuSettings.ClaimDailyBonus(250);
-            _coinsText.text = MenuSettings.Coins.ToString("N0");
-            _bonusText.text = claimed ? "CLAIMED TODAY" : "ALREADY CLAIMED";
         }
 
         private GameObject MakePanel(string name, string title)
         {
             GameObject panel = UiTools.MakeImage(_canvasObject.transform, name,
-                new Vector2(0.14f, 0.12f), new Vector2(0.68f, 0.84f),
+                new Vector2(0.30f, 0.10f), new Vector2(0.90f, 0.88f),
                 new Color(0.02f, 0.04f, 0.09f, 0.96f)).gameObject;
-            panel.GetComponent<Image>().raycastTarget = true; // block clicks reaching the menu behind it
+            panel.GetComponent<Image>().raycastTarget = true;
             UiTools.MakeText(panel.transform, "Panel Title", title, 46,
-                new Vector2(0.03f, 0.86f), new Vector2(0.80f, 0.99f), TextAnchor.MiddleLeft,
+                new Vector2(0.03f, 0.86f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft,
                 new Color(1f, 0.84f, 0.32f));
-            UiTools.MakeButton(panel.transform, "Close " + name, "BACK",
-                new Vector2(0.80f, 0.88f), new Vector2(0.98f, 0.99f), ClosePanels, 24,
-                UiTools.GetSprite("UI/Menu/ButtonSprite"), new Color(0.18f, 0.25f, 0.36f, 0.96f));
+            UiTools.MakeAssetButton(panel.transform, "Back", MenuRoot + "Sub_Buttons/Button_BACK",
+                new Vector2(0.76f, 0.88f), new Vector2(0.96f, 0.99f), ClosePanels);
             panel.SetActive(false);
             return panel;
         }
 
-        private void BuildSettingsPanel(Sprite buttonSprite)
+        private static Text Header(Transform parent, string resource, float y)
+        {
+            Image image = UiTools.MakeImage(parent, resource, new Vector2(0.05f, y), new Vector2(0.25f, y + 0.08f),
+                Color.white, UiTools.GetSprite(MenuRoot + resource));
+            image.preserveAspect = true;
+            return UiTools.MakeText(parent, resource + " Caption", "", 24,
+                new Vector2(0.27f, y), new Vector2(0.95f, y + 0.08f), TextAnchor.MiddleLeft,
+                new Color(0.86f, 0.92f, 1f));
+        }
+
+        private void BuildSettingsPanel()
         {
             _settingsPanel = MakePanel("Settings Panel", "SETTINGS");
             Transform panel = _settingsPanel.transform;
-            _masterValue = UiTools.MakeText(panel, "Master Label", "", 26,
-                new Vector2(0.05f, 0.62f), new Vector2(0.95f, 0.72f), TextAnchor.MiddleLeft);
+
+            _masterValue = Header(panel, "Sub_Buttons/Button_MUSIC", 0.62f);
             Slider master = MakeSlider(panel, "Master Slider", new Vector2(0.05f, 0.55f), new Vector2(0.95f, 0.62f));
-            master.wholeNumbers = false;
             master.SetValueWithoutNotify(MenuSettings.MasterVolume);
             master.onValueChanged.AddListener(value =>
             {
@@ -272,10 +295,8 @@ namespace CityDrive
                 RefreshSettingsLabels();
             });
 
-            _sfxValue = UiTools.MakeText(panel, "SFX Label", "", 26,
-                new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.52f), TextAnchor.MiddleLeft);
+            _sfxValue = Header(panel, "Sub_Buttons/Button_SOUND", 0.42f);
             Slider sfx = MakeSlider(panel, "SFX Slider", new Vector2(0.05f, 0.35f), new Vector2(0.95f, 0.42f));
-            sfx.wholeNumbers = false;
             sfx.SetValueWithoutNotify(MenuSettings.SfxVolume);
             sfx.onValueChanged.AddListener(value =>
             {
@@ -284,24 +305,22 @@ namespace CityDrive
                 RefreshSettingsLabels();
             });
 
-            _qualityValue = UiTools.MakeText(panel, "Quality Label", "", 26,
-                new Vector2(0.05f, 0.22f), new Vector2(0.95f, 0.32f), TextAnchor.MiddleLeft);
-            Slider quality = MakeSlider(panel, "Quality Slider", new Vector2(0.05f, 0.15f), new Vector2(0.95f, 0.22f));
-            quality.wholeNumbers = true;
-            quality.minValue = 0;
-            quality.maxValue = Mathf.Max(0, QualitySettings.names.Length - 1);
-            quality.SetValueWithoutNotify(MenuSettings.QualityLevel);
-            quality.onValueChanged.AddListener(value =>
-            {
-                MenuSettings.QualityLevel = Mathf.RoundToInt(value);
-                MenuSettings.Apply(_audio);
-                RefreshSettingsLabels();
-            });
-
-            UiTools.MakeText(panel, "Settings Note", "Changes save locally and apply immediately.", 22,
-                new Vector2(0.05f, 0.03f), new Vector2(0.95f, 0.12f), TextAnchor.MiddleLeft,
-                new Color(0.70f, 0.78f, 0.88f));
+            Header(panel, "Sub_Buttons/Button_GRAPHICS", 0.22f);
+            UiTools.MakeAssetButton(panel, "Low Quality", MenuRoot + "Sub_Buttons/Button_LOW",
+                new Vector2(0.05f, 0.10f), new Vector2(0.25f, 0.21f), () => SetQuality(0));
+            UiTools.MakeAssetButton(panel, "Medium Quality", MenuRoot + "Sub_Buttons/Button_MEDIUM",
+                new Vector2(0.27f, 0.10f), new Vector2(0.47f, 0.21f), () => SetQuality(1));
+            UiTools.MakeAssetButton(panel, "High Quality", MenuRoot + "Sub_Buttons/Button_HIGH",
+                new Vector2(0.49f, 0.10f), new Vector2(0.69f, 0.21f), () => SetQuality(2));
+            UiTools.MakeAssetButton(panel, "Save Settings", MenuRoot + "Sub_Buttons/Button_SAVE",
+                new Vector2(0.71f, 0.10f), new Vector2(0.95f, 0.21f), () => { MenuSettings.Save(); ClosePanels(); });
             RefreshSettingsLabels();
+        }
+
+        private static void SetQuality(int level)
+        {
+            MenuSettings.QualityLevel = level;
+            MenuSettings.Apply(null);
         }
 
         private static Slider MakeSlider(Transform parent, string name, Vector2 min, Vector2 max)
@@ -350,80 +369,103 @@ namespace CityDrive
         private void RefreshSettingsLabels()
         {
             if (_masterValue != null)
-                _masterValue.text = "MASTER VOLUME    " + Mathf.RoundToInt(MenuSettings.MasterVolume * 100f) + "%";
+                _masterValue.text = Mathf.RoundToInt(MenuSettings.MasterVolume * 100f) + "%";
             if (_sfxValue != null)
-                _sfxValue.text = "ENGINE / SFX     " + Mathf.RoundToInt(MenuSettings.SfxVolume * 100f) + "%";
-            if (_qualityValue != null)
-            {
-                string[] names = QualitySettings.names;
-                int index = MenuSettings.QualityLevel;
-                _qualityValue.text = "GRAPHICS         " + (index < names.Length ? names[index] : index.ToString());
-            }
+                _sfxValue.text = Mathf.RoundToInt(MenuSettings.SfxVolume * 100f) + "%";
         }
 
-        private void BuildCustomizePanel(Sprite buttonSprite)
+        private void BuildCustomizePanel()
         {
             _customizePanel = MakePanel("Customize Panel", "CUSTOMIZE");
-            string[] names = { "RACING YELLOW", "SKY BLUE", "CRIMSON", "EMERALD", "SILVER", "MIDNIGHT" };
-            for (int i = 0; i < names.Length; i++)
-            {
-                int index = i;
-                float y = 0.72f - i * 0.10f;
-                UiTools.MakeButton(_customizePanel.transform, "Paint " + i, names[i],
-                    new Vector2(0.05f, y), new Vector2(0.55f, y + 0.085f),
-                    () => SetPaint(index), 22, buttonSprite, PaintColor(i));
-            }
-            UiTools.MakeText(_customizePanel.transform, "Customize Note",
-                "Wheel and body-kit options: coming soon.", 24,
-                new Vector2(0.05f, 0.10f), new Vector2(0.95f, 0.22f), TextAnchor.MiddleLeft,
+            Transform panel = _customizePanel.transform;
+            Header(panel, "Sub_Buttons/Button_PAINT", 0.62f);
+            _paintName = UiTools.MakeText(panel, "Paint Name", "", 32,
+                new Vector2(0.05f, 0.50f), new Vector2(0.95f, 0.62f), TextAnchor.MiddleCenter,
+                new Color(0.96f, 0.86f, 0.40f));
+            UiTools.MakeAssetButton(panel, "Previous Paint", MenuRoot + "Sub_Buttons/Button_PREVIOUS",
+                new Vector2(0.10f, 0.34f), new Vector2(0.34f, 0.48f), () => ChangePaint(-1));
+            UiTools.MakeAssetButton(panel, "Next Paint", MenuRoot + "Sub_Buttons/Button_NEXT",
+                new Vector2(0.66f, 0.34f), new Vector2(0.90f, 0.48f), () => ChangePaint(1));
+
+            UiTools.MakeAssetButton(panel, "Wheels (coming soon)", MenuRoot + "Sub_Buttons/Button_WHEELS",
+                new Vector2(0.10f, 0.18f), new Vector2(0.34f, 0.31f), null, false);
+            UiTools.MakeAssetButton(panel, "Upgrade (coming soon)", MenuRoot + "Sub_Buttons/Button_UPGRADE",
+                new Vector2(0.66f, 0.18f), new Vector2(0.90f, 0.31f), null, false);
+            UiTools.MakeText(panel, "Coming Soon", "Wheels and upgrades: coming soon.", 22,
+                new Vector2(0.05f, 0.06f), new Vector2(0.95f, 0.17f), TextAnchor.MiddleCenter,
                 new Color(0.78f, 0.84f, 0.92f));
+            RefreshPaintLabel();
         }
 
-        private static Color PaintColor(int index)
+        private static readonly string[] PaintNames =
         {
-            Color[] colors =
-            {
-                new Color(0.95f, 0.72f, 0.16f, 1f), new Color(0.16f, 0.55f, 0.92f, 1f),
-                new Color(0.78f, 0.14f, 0.18f, 1f), new Color(0.12f, 0.62f, 0.38f, 1f),
-                new Color(0.72f, 0.75f, 0.80f, 1f), new Color(0.09f, 0.11f, 0.18f, 1f)
-            };
-            return colors[Mathf.Clamp(index, 0, colors.Length - 1)];
-        }
+            "RACING YELLOW", "SKY BLUE", "CRIMSON", "EMERALD", "SILVER", "MIDNIGHT"
+        };
 
-        private void SetPaint(int index)
+        private void ChangePaint(int delta)
         {
+            int index = (MenuSettings.BodyColor + delta + PaintNames.Length) % PaintNames.Length;
             MenuSettings.BodyColor = index;
             GameBootstrap.ApplyBodyColor(_car, index);
             MenuSettings.Save();
+            RefreshPaintLabel();
         }
 
-        private void BuildCreditsPanel(Sprite buttonSprite)
+        private void RefreshPaintLabel()
+        {
+            if (_paintName != null)
+                _paintName.text = PaintNames[Mathf.Clamp(MenuSettings.BodyColor, 0, PaintNames.Length - 1)];
+        }
+
+        private void BuildCreditsPanel()
         {
             _creditsPanel = MakePanel("Credits Panel", "CREDITS");
             UiTools.MakeText(_creditsPanel.transform, "Credits Text",
                 "CITY DRIVE — Unity 3D open-world driving\n\n" +
-                "City GLB, BMW 330i xDrive GLB, Complete Vehicle Pack V2: supplied by the project owner.\n" +
-                "UniStorm Weather System: supplied by the project owner.\n" +
-                "Realistic Car Controller Pro v1.44.0: BoneCracker Games, supplied by the project owner.\n" +
-                "UI button art: staged from the supplied RCC Pro UI texture set.\n\n" +
-                "Audio is generated procedurally at runtime; no external audio files are redistributed.",
+                "City GLB, BMW GLB, Complete Vehicle Pack V2, garage GLBs: supplied by the project owner.\n" +
+                "Car Menu UI v2: original generated kit supplied by the project owner.\n" +
+                "UniStorm Weather System and RCC Pro v1.44: supplied by the project owner.\n\n" +
+                "Audio is generated procedurally at runtime; no external audio is redistributed.",
                 26, new Vector2(0.05f, 0.10f), new Vector2(0.95f, 0.82f), TextAnchor.UpperLeft,
                 new Color(0.86f, 0.91f, 0.98f));
         }
 
-        private void BuildQuitPanel(Sprite buttonSprite)
+        private void BuildQuitPanel()
         {
             _quitPanel = MakePanel("Quit Panel", "QUIT GAME?");
             UiTools.MakeText(_quitPanel.transform, "Quit Message",
                 Application.platform == RuntimePlatform.IPhonePlayer
-                    ? "iOS apps should be closed with the device home gesture."
-                    : "Your car choice, paint and settings are already saved.",
+                    ? "Use the device home gesture to close this app."
+                    : "Your car, paint and settings are already saved.",
                 26, new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.72f), TextAnchor.MiddleCenter);
-            UiTools.MakeButton(_quitPanel.transform, "Confirm Quit", "QUIT",
-                new Vector2(0.10f, 0.14f), new Vector2(0.46f, 0.32f), ConfirmQuit, 28, buttonSprite,
-                new Color(0.35f, 0.12f, 0.14f, 0.98f));
-            UiTools.MakeButton(_quitPanel.transform, "Cancel Quit", "CANCEL",
-                new Vector2(0.54f, 0.14f), new Vector2(0.90f, 0.32f), ClosePanels, 28, buttonSprite);
+            UiTools.MakeAssetButton(_quitPanel.transform, "Confirm Quit", MenuRoot + "Sub_Buttons/Button_YES",
+                new Vector2(0.10f, 0.14f), new Vector2(0.44f, 0.32f), ConfirmQuit);
+            UiTools.MakeAssetButton(_quitPanel.transform, "Cancel Quit", MenuRoot + "Sub_Buttons/Button_NO",
+                new Vector2(0.56f, 0.14f), new Vector2(0.90f, 0.32f), ClosePanels);
+        }
+
+        private void BuildWalletPanel()
+        {
+            _walletPanel = MakePanel("Wallet Panel", "WALLET");
+            UiTools.MakeText(_walletPanel.transform, "Wallet Balance", MenuSettings.Coins.ToString("N0"), 72,
+                new Vector2(0.05f, 0.42f), new Vector2(0.95f, 0.68f), TextAnchor.MiddleCenter,
+                new Color(1f, 0.90f, 0.42f));
+            _bonusText = UiTools.MakeText(_walletPanel.transform, "Bonus Status",
+                MenuSettings.BonusAvailable ? "DAILY BONUS READY" : "BONUS CLAIMED TODAY", 26,
+                new Vector2(0.05f, 0.30f), new Vector2(0.95f, 0.42f), TextAnchor.MiddleCenter,
+                new Color(0.70f, 0.94f, 0.74f));
+            UiTools.MakeButton(_walletPanel.transform, "Claim Bonus", "CLAIM +250",
+                new Vector2(0.25f, 0.12f), new Vector2(0.75f, 0.28f), ClaimBonus, 30,
+                UiTools.GetSprite("UI/Menu/ButtonSprite"), new Color(0.18f, 0.40f, 0.24f, 0.98f));
+        }
+
+        private void ClaimBonus()
+        {
+            bool claimed = MenuSettings.ClaimDailyBonus(250);
+            _coinsText.text = MenuSettings.Coins.ToString("N0");
+            if (_bonusText != null)
+                _bonusText.text = claimed ? "BONUS CLAIMED TODAY" : "ALREADY CLAIMED";
+            if (_garage != null) _garage.RefreshCoins();
         }
 
         private void OpenGarage()
@@ -435,12 +477,14 @@ namespace CityDrive
         private void OpenCustomize()
         {
             ClosePanels();
+            RefreshPaintLabel();
             _customizePanel.SetActive(true);
         }
 
         private void OpenSettings()
         {
             ClosePanels();
+            RefreshSettingsLabels();
             _settingsPanel.SetActive(true);
         }
 
@@ -448,6 +492,12 @@ namespace CityDrive
         {
             ClosePanels();
             _creditsPanel.SetActive(true);
+        }
+
+        private void OpenWallet()
+        {
+            ClosePanels();
+            _walletPanel.SetActive(true);
         }
 
         private void AskQuit()
@@ -471,6 +521,7 @@ namespace CityDrive
             if (_customizePanel != null) _customizePanel.SetActive(false);
             if (_creditsPanel != null) _creditsPanel.SetActive(false);
             if (_quitPanel != null) _quitPanel.SetActive(false);
+            if (_walletPanel != null) _walletPanel.SetActive(false);
         }
 
         private void OnCarSelected(GameObject prefab, string displayName)
@@ -511,10 +562,12 @@ namespace CityDrive
             {
                 _loading.Show("UI/loading_bg_2");
                 _loading.SetProgress(0.08f, "LOADING CITY AND CAR MODEL",
-                    "Clearing showroom and preparing the road...");
+                    "Clearing menu and preparing the road...");
             }
             if (_showroom != null) Destroy(_showroom);
             if (_canvasObject != null) Destroy(_canvasObject);
+            if (_previewCamera != null) Destroy(_previewCamera.gameObject);
+            if (_previewTexture != null) _previewTexture.Release();
             yield return null;
 
             if (_loading != null)
@@ -540,6 +593,7 @@ namespace CityDrive
             if (_city != null && _city.Root != null) _city.Root.SetActive(true);
             _controller.enabled = true;
             _chase.enabled = true;
+            if (_camera != null) _camera.enabled = true;
             if (_audio != null)
             {
                 _audio.SetMasterVolume(MenuSettings.SfxVolume);
@@ -562,7 +616,6 @@ namespace CityDrive
             if (_onPlay != null) _onPlay();
         }
 
-        /// <summary>Allows a future main-menu return to resume the same smooth rotation.</summary>
         public void ResumeShowroom()
         {
             _playing = false;

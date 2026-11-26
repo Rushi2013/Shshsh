@@ -6,17 +6,22 @@ using UnityEngine.UI;
 namespace CityDrive
 {
     /// <summary>
-    /// Runtime garage screen. Loads every supplied car prefab from Resources,
-    /// renders a live thumbnail for each one, and calls back when SELECT is
-    /// tapped so the showroom and the gameplay car both change immediately.
+    /// Car Menu UI v2 garage. Shows nine cars per page with real next/previous
+    /// navigation, live thumbnails, selected state and persistent car choice.
+    /// All cars are available locally; no fake purchase/locked state is shown.
     /// </summary>
     public sealed class GarageController : MonoBehaviour
     {
+        private const string MenuRoot = "UI/CarMenu/";
+        private const int PageSize = 9;
+
         private readonly List<GameObject> _prefabs = new List<GameObject>();
-        private readonly Dictionary<string, Image> _cards = new Dictionary<string, Image>();
+        private readonly List<GameObject> _cards = new List<GameObject>();
         private Action<GameObject, string> _onSelect;
         private GameObject _panel;
         private Text _coinsText;
+        private Text _pageText;
+        private int _page;
 
         public bool IsOpen => _panel != null && _panel.activeSelf;
 
@@ -27,72 +32,98 @@ namespace CityDrive
             GameObject[] traffic = Resources.LoadAll<GameObject>("TrafficCars");
             if (garage != null) _prefabs.AddRange(garage);
             if (traffic != null) _prefabs.AddRange(traffic);
+            _prefabs.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
 
-            _panel = new GameObject("Garage Panel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            _panel.transform.SetParent(parent, false);
-            RectTransform panelRect = _panel.GetComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0.06f, 0.08f);
-            panelRect.anchorMax = new Vector2(0.94f, 0.90f);
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
-            Image panelImage = _panel.GetComponent<Image>();
-            panelImage.color = new Color(0.03f, 0.05f, 0.09f, 0.97f);
-            panelImage.raycastTarget = true;
+            _panel = UiTools.MakeImage(parent, "Garage Panel", new Vector2(0.04f, 0.07f),
+                new Vector2(0.92f, 0.92f), new Color(0.02f, 0.04f, 0.09f, 0.97f)).gameObject;
+            _panel.GetComponent<Image>().raycastTarget = true;
 
-            UiTools.MakeText(_panel.transform, "Garage Title", "CAR GARAGE", 52,
-                new Vector2(0f, 0.88f), new Vector2(0.58f, 1f), TextAnchor.MiddleLeft,
+            Image carsBadge = UiTools.MakeImage(_panel.transform, "Cars Badge",
+                new Vector2(0.02f, 0.86f), new Vector2(0.22f, 0.99f), Color.white,
+                UiTools.GetSprite(MenuRoot + "Main_Buttons/Button_CARS"));
+            carsBadge.preserveAspect = true;
+            UiTools.MakeText(_panel.transform, "Garage Title", "CAR GARAGE", 44,
+                new Vector2(0.20f, 0.86f), new Vector2(0.60f, 0.99f), TextAnchor.MiddleLeft,
                 new Color(1f, 0.84f, 0.32f));
             _coinsText = UiTools.MakeText(_panel.transform, "Garage Coins", "COINS  " + MenuSettings.Coins.ToString("N0"), 30,
-                new Vector2(0.58f, 0.90f), new Vector2(0.82f, 1f), TextAnchor.MiddleRight,
+                new Vector2(0.60f, 0.89f), new Vector2(0.78f, 0.99f), TextAnchor.MiddleRight,
                 new Color(1f, 0.90f, 0.42f));
-            MakeButton(_panel.transform, "Close Garage", "CLOSE", new Vector2(0.84f, 0.90f),
-                new Vector2(0.98f, 0.98f), Close);
+            UiTools.MakeAssetButton(_panel.transform, "Close Garage", MenuRoot + "Sub_Buttons/Button_CLOSE",
+                new Vector2(0.80f, 0.87f), new Vector2(0.98f, 0.99f), Close);
 
-            int columns = 3;
-            for (int i = 0; i < _prefabs.Count; i++)
+            for (int i = 0; i < PageSize; i++)
             {
-                GameObject prefab = _prefabs[i];
-                int col = i % columns;
-                int row = i / columns;
-                Vector2 min = new Vector2(0.04f + col * 0.31f, 0.62f - row * 0.20f);
-                Vector2 max = new Vector2(min.x + 0.28f, min.y + 0.18f);
-                BuildCard(prefab, min, max);
+                int col = i % 3;
+                int row = i / 3;
+                Vector2 min = new Vector2(0.03f + col * 0.31f, 0.54f - row * 0.19f);
+                Vector2 max = new Vector2(min.x + 0.29f, min.y + 0.18f);
+                GameObject card = UiTools.MakeImage(_panel.transform, "Card " + i, min, max,
+                    new Color(0.09f, 0.13f, 0.20f, 0.98f)).gameObject;
+                _cards.Add(card);
             }
+
+            UiTools.MakeAssetButton(_panel.transform, "Previous Page", MenuRoot + "Sub_Buttons/Button_PREVIOUS",
+                new Vector2(0.05f, 0.02f), new Vector2(0.25f, 0.14f), () => ChangePage(-1));
+            _pageText = UiTools.MakeText(_panel.transform, "Page Label", "", 28,
+                new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.14f), TextAnchor.MiddleCenter,
+                new Color(0.86f, 0.92f, 1f));
+            UiTools.MakeAssetButton(_panel.transform, "Next Page", MenuRoot + "Sub_Buttons/Button_NEXT",
+                new Vector2(0.75f, 0.02f), new Vector2(0.95f, 0.14f), () => ChangePage(1));
 
             _panel.SetActive(false);
         }
 
-        private void BuildCard(GameObject prefab, Vector2 min, Vector2 max)
+        private void ChangePage(int delta)
         {
-            GameObject card = new GameObject("Card " + prefab.name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            card.transform.SetParent(_panel.transform, false);
-            RectTransform rect = card.GetComponent<RectTransform>();
-            rect.anchorMin = min;
-            rect.anchorMax = max;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            Image cardImage = card.GetComponent<Image>();
-            cardImage.color = new Color(0.10f, 0.14f, 0.21f, 0.96f);
-            _cards[prefab.name] = cardImage;
+            int pages = Mathf.Max(1, Mathf.CeilToInt(_prefabs.Count / (float)PageSize));
+            _page = (_page + delta + pages) % pages;
+            RenderPage();
+        }
 
-            Sprite thumbnail = RenderThumbnail(prefab);
-            Image preview = UiTools.MakeImage(card.transform, "Preview",
-                new Vector2(0.02f, 0.22f), new Vector2(0.98f, 0.98f), Color.white, thumbnail);
-            preview.preserveAspect = true;
+        private void RenderPage()
+        {
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                GameObject card = _cards[i];
+                if (card == null) continue;
+                for (int c = card.transform.childCount - 1; c >= 0; c--)
+                    Destroy(card.transform.GetChild(c).gameObject);
 
-            UiTools.MakeText(card.transform, "Name", CarNames.Display(prefab.name), 20,
-                new Vector2(0.02f, 0.02f), new Vector2(0.62f, 0.22f), TextAnchor.MiddleLeft,
-                new Color(0.86f, 0.91f, 0.98f));
-            MakeButton(card.transform, "Select " + prefab.name, "SELECT",
-                new Vector2(0.64f, 0.02f), new Vector2(0.98f, 0.22f),
-                () => Select(prefab));
+                int index = _page * PageSize + i;
+                if (index >= _prefabs.Count)
+                {
+                    card.SetActive(false);
+                    continue;
+                }
+                card.SetActive(true);
+                GameObject prefab = _prefabs[index];
+                bool selected = prefab.name == MenuSettings.SelectedCar;
+                card.GetComponent<Image>().color = selected
+                    ? new Color(0.12f, 0.34f, 0.24f, 0.98f)
+                    : new Color(0.09f, 0.13f, 0.20f, 0.98f);
+
+                Sprite thumbnail = RenderThumbnail(prefab);
+                Image preview = UiTools.MakeImage(card.transform, "Preview",
+                    new Vector2(0.02f, 0.24f), new Vector2(0.98f, 0.98f), Color.white, thumbnail);
+                preview.preserveAspect = true;
+                UiTools.MakeText(card.transform, "Name", CarNames.Display(prefab.name), 20,
+                    new Vector2(0.02f, 0.02f), new Vector2(0.52f, 0.22f), TextAnchor.MiddleLeft,
+                    new Color(0.86f, 0.91f, 0.98f));
+                string sprite = selected ? "Sub_Buttons/Button_SELECTED" : "Sub_Buttons/Button_SELECT";
+                UiTools.MakeAssetButton(card.transform, "Select " + prefab.name, MenuRoot + sprite,
+                    new Vector2(0.54f, 0.02f), new Vector2(0.98f, 0.22f),
+                    selected ? (Action)null : () => Select(prefab), !selected);
+            }
+
+            int pages = Mathf.Max(1, Mathf.CeilToInt(_prefabs.Count / (float)PageSize));
+            if (_pageText != null) _pageText.text = "PAGE " + (_page + 1) + " / " + pages;
         }
 
         private static Sprite RenderThumbnail(GameObject prefab)
         {
             const int width = 256;
             const int height = 144;
-            GameObject temp = Instantiate(prefab, new Vector3(1000f, 0f, 0f), Quaternion.identity);
+            GameObject temp = UnityEngine.Object.Instantiate(prefab, new Vector3(1000f, 0f, 0f), Quaternion.identity);
             Bounds bounds = new Bounds(temp.transform.position, Vector3.one);
             foreach (Renderer renderer in temp.GetComponentsInChildren<Renderer>())
                 bounds.Encapsulate(renderer.bounds);
@@ -129,37 +160,13 @@ namespace CityDrive
             return Sprite.Create(texture, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        private static void MakeButton(Transform parent, string name, string label, Vector2 min, Vector2 max, Action action)
-        {
-            GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            RectTransform rect = go.GetComponent<RectTransform>();
-            rect.anchorMin = min;
-            rect.anchorMax = max;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
-            Image image = go.GetComponent<Image>();
-            image.sprite = UiTools.GetSprite("UI/Menu/ButtonSprite");
-            image.type = image.sprite != null ? Image.Type.Sliced : Image.Type.Simple;
-            image.color = new Color(0.12f, 0.62f, 0.86f, 0.96f);
-            Button button = go.GetComponent<Button>();
-            button.targetGraphic = image;
-            button.onClick.AddListener(() => action());
-            UiTools.MakeText(go.transform, "Label", label, 20, Vector2.zero, Vector2.one,
-                TextAnchor.MiddleCenter, new Color(0.03f, 0.05f, 0.08f));
-        }
-
         public void Open()
         {
             if (_panel == null) return;
-            if (_coinsText != null) _coinsText.text = "COINS  " + MenuSettings.Coins.ToString("N0");
-            foreach (KeyValuePair<string, Image> pair in _cards)
-            {
-                bool selected = pair.Key == MenuSettings.SelectedCar;
-                if (pair.Value != null)
-                    pair.Value.color = selected ? new Color(0.16f, 0.42f, 0.28f, 0.98f)
-                                                : new Color(0.10f, 0.14f, 0.21f, 0.96f);
-            }
+            RefreshCoins();
+            int pages = Mathf.Max(1, Mathf.CeilToInt(_prefabs.Count / (float)PageSize));
+            if (_page >= pages) _page = 0;
+            RenderPage();
             _panel.SetActive(true);
         }
 
@@ -168,8 +175,14 @@ namespace CityDrive
             if (_panel != null) _panel.SetActive(false);
         }
 
+        public void RefreshCoins()
+        {
+            if (_coinsText != null) _coinsText.text = "COINS  " + MenuSettings.Coins.ToString("N0");
+        }
+
         private void Select(GameObject prefab)
         {
+            MenuSettings.SelectCar(prefab.name);
             if (_onSelect != null) _onSelect(prefab, CarNames.Display(prefab.name));
             Close();
         }

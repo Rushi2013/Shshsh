@@ -52,6 +52,7 @@ jobs:
           cliVersion: v0.1.77
           targetPlatform: Android
           buildMethod: ProjectSetup.BuildAndroid
+          customParameters: "-logFile /github/workspace/Editor.log"
           allowDirtyBuild: true
 
       - name: Save build diagnostics on failure
