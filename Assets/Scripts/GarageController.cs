@@ -80,7 +80,7 @@ namespace CityDrive
                 new Vector2(0.02f, 0.22f), new Vector2(0.98f, 0.98f), Color.white, thumbnail);
             preview.preserveAspect = true;
 
-            UiTools.MakeText(card.transform, "Name", prefab.name, 20,
+            UiTools.MakeText(card.transform, "Name", CarNames.Display(prefab.name), 20,
                 new Vector2(0.02f, 0.02f), new Vector2(0.62f, 0.22f), TextAnchor.MiddleLeft,
                 new Color(0.86f, 0.91f, 0.98f));
             MakeButton(card.transform, "Select " + prefab.name, "SELECT",
@@ -170,7 +170,7 @@ namespace CityDrive
 
         private void Select(GameObject prefab)
         {
-            if (_onSelect != null) _onSelect(prefab, prefab.name);
+            if (_onSelect != null) _onSelect(prefab, CarNames.Display(prefab.name));
             Close();
         }
     }

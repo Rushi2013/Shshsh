@@ -37,3 +37,15 @@ Original package copies remain under `Assets/Realistic Car Controller Pro/Textur
 ## Rollback
 
 Revert this commit and restore the previous `HomeScreen.cs`, `GarageController.cs`, `UiTools.cs`, `GameBootstrap.cs` and `VehicleAudio.cs`. The new Resources UI textures and report file can be removed independently; no existing asset was overwritten.
+
+## Additional garage cars (user-supplied GLBs)
+
+Seven more GLBs were copied into `Assets/Resources/GarageCars/` so the garage can
+load them at runtime: `CarConcept`, `930`, `carrera`, `centenario`, `r34`, `s15`,
+`terzo`. `GameBootstrap.SetPlayerVisual` now auto-scales garage GLBs to the
+playable car footprint before fitting them, and `CarNames.cs` supplies friendly
+display names. Selection and paint persist through the same PlayerPrefs keys.
+
+Credits and licence notices remain in `Assets/ImportedAssets/GarageModels/`.
+Review those notices before distributing or monetising the build (one model is
+CC BY-NC and another is CC BY-SA).

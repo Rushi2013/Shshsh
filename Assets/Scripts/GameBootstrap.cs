@@ -28,7 +28,7 @@ namespace CityDrive
             get
             {
                 string saved = MenuSettings.SelectedCar;
-                return string.IsNullOrEmpty(saved) ? "BMW 330i xDrive" : saved;
+                return string.IsNullOrEmpty(saved) ? "BMW 330i xDrive" : CarNames.Display(saved);
             }
         }
 
@@ -371,7 +371,7 @@ namespace CityDrive
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.identity;
             UpgradeMaterials(visual);
-            FitCarVisual(car, visual);
+            FitCarVisual(car, visual, true); // garage GLBs can have any source scale
             return visual;
         }
 
@@ -467,8 +467,16 @@ namespace CityDrive
         /// Chooses the visual rotation from actual wheel positions: wheels BELOW the
         /// body and the front axle along +Z. Fixes upside-down glTF imports.
         /// </summary>
-        private static void FitCarVisual(GameObject car, GameObject visual)
+        private static void FitCarVisual(GameObject car, GameObject visual, bool autoScale = false)
         {
+            if (autoScale)
+            {
+                Bounds raw = BoundsOf(visual);
+                float footprint = Mathf.Max(raw.size.x, raw.size.z);
+                if (footprint > 0.01f && Mathf.Abs(footprint - 4.23f) > 0.35f)
+                    visual.transform.localScale *= 4.23f / footprint;
+            }
+
             List<Transform> frontWheels = new List<Transform>();
             List<Transform> rearWheels = new List<Transform>();
             foreach (Transform t in visual.GetComponentsInChildren<Transform>(true))
