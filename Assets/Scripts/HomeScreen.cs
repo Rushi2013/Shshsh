@@ -26,6 +26,8 @@ namespace CityDrive
         private Action _onPlay;
         private GameObject _showroom;
         private GameObject _canvasObject;
+        private GarageController _garage;
+        private Text _carNameText;
         private bool _playing;
         private float _showroomYaw;
         private readonly Vector3 _showroomPosition = new Vector3(0f, 0.72f, 0f);
@@ -159,7 +161,7 @@ namespace CityDrive
             UiTools.MakeText(_canvasObject.transform, "Home Title", "CITY DRIVE", 80,
                 new Vector2(0.1f, 0.82f), new Vector2(0.9f, 0.94f), TextAnchor.MiddleCenter,
                 new Color(1f, 0.84f, 0.30f));
-            UiTools.MakeText(_canvasObject.transform, "Home Car", "BMW 330i xDrive", 36,
+            _carNameText = UiTools.MakeText(_canvasObject.transform, "Home Car", "BMW 330i xDrive", 36,
                 new Vector2(0.1f, 0.75f), new Vector2(0.9f, 0.82f), TextAnchor.MiddleCenter,
                 new Color(0.70f, 0.90f, 1f));
             UiTools.MakeText(_canvasObject.transform, "Home Hint",
@@ -185,6 +187,40 @@ namespace CityDrive
             UiTools.MakeText(buttonObject.transform, "Play Label", "PLAY", 32,
                 new Vector2(0f, -0.35f), new Vector2(1f, 0.12f), TextAnchor.MiddleCenter,
                 new Color(0.06f, 0.09f, 0.13f));
+
+            GameObject garageObject = new GameObject("Garage Button", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(Image), typeof(Button));
+            garageObject.transform.SetParent(_canvasObject.transform, false);
+            RectTransform garageRect = garageObject.GetComponent<RectTransform>();
+            garageRect.anchorMin = new Vector2(0.27f, 0.28f);
+            garageRect.anchorMax = new Vector2(0.38f, 0.46f);
+            garageRect.offsetMin = Vector2.zero;
+            garageRect.offsetMax = Vector2.zero;
+            Image garageImage = garageObject.GetComponent<Image>();
+            garageImage.color = new Color(0.12f, 0.62f, 0.86f, 0.96f);
+            Button garageButton = garageObject.GetComponent<Button>();
+            garageButton.targetGraphic = garageImage;
+            garageButton.onClick.AddListener(OpenGarage);
+            UiTools.MakeText(garageObject.transform, "Garage Label", "GARAGE", 24,
+                new Vector2(0f, -0.35f), new Vector2(1f, 0.12f), TextAnchor.MiddleCenter,
+                new Color(0.03f, 0.05f, 0.08f));
+
+            _garage = gameObject.AddComponent<GarageController>();
+            _garage.Build(_canvasObject.transform, OnCarSelected);
+        }
+
+        private void OpenGarage()
+        {
+            if (_garage != null) _garage.Open();
+        }
+
+        private void OnCarSelected(GameObject prefab, string displayName)
+        {
+            GameObject visual = GameBootstrap.SetPlayerVisual(_car, prefab);
+            if (visual == null) return;
+            VehicleVisuals visuals = _car.GetComponent<VehicleVisuals>();
+            if (visuals != null) visuals.FindWheels(_car.transform);
+            if (_carNameText != null) _carNameText.text = displayName;
         }
 
         private void Update()

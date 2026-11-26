@@ -53,6 +53,11 @@ namespace CityDrive
             CreateGroundFallback(cityHost.transform, city.Bounds);
             SetupEnvironment();
 
+            // Ambient traffic uses the supplied Complete Vehicle Pack prefabs and
+            // follows a waypoint loop inside the city bounds.
+            TrafficSystem traffic = cityHost.AddComponent<TrafficSystem>();
+            traffic.Build(city);
+
             loading.SetProgress(0.78f, "BUILDING CAR", "Preparing suspension, tyres and audio...");
             Vector3 spawn = city.FindSpawnPoint();
             Quaternion spawnRotation = city.SpawnRotation;
@@ -273,6 +278,30 @@ namespace CityDrive
             VehicleLights.Create(car.transform, controller);
             ContactShadow.Create(car.transform); // subtle supplement to the real sun shadow
             return car;
+        }
+
+        /// <summary>
+        /// Replaces only the visual child of the player car. Physics, control and
+        /// effects remain attached to the same rigidbody, so a garage selection is
+        /// reflected both in the showroom and in the gameplay map.
+        /// </summary>
+        public static GameObject SetPlayerVisual(GameObject car, GameObject prefab)
+        {
+            if (car == null || prefab == null) return null;
+            for (int i = car.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = car.transform.GetChild(i);
+                if (child.name.Contains("(GLB)") || child.name.Contains("Visual") || child.name.Contains("Real Car"))
+                    Destroy(child.gameObject);
+            }
+
+            GameObject visual = Instantiate(prefab, car.transform);
+            visual.name = prefab.name + " (Visual)";
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.identity;
+            UpgradeMaterials(visual);
+            FitCarVisual(car, visual);
+            return visual;
         }
 
         /// <summary>

@@ -1,0 +1,279 @@
+fileFormatVersion: 2
+guid: e216fd77817b5164c8aeab9d506cf9c1
+timeCreated: 1556354115
+licenseType: Store
+ModelImporter:
+  serializedVersion: 19
+  fileIDToRecycleName:
+    100000: BL
+    100002: Bonnet
+    100004: BR
+    100006: Bumper
+    100008: Can
+    100010: Chassis
+    100012: FL
+    100014: FR
+    100016: LOD1
+    100018: LOD1 1
+    100020: LOD1 10
+    100022: LOD1 11
+    100024: LOD1 12
+    100026: LOD1 2
+    100028: LOD1 3
+    100030: LOD1 4
+    100032: LOD1 5
+    100034: LOD1 6
+    100036: LOD1 7
+    100038: LOD1 8
+    100040: LOD1 9
+    100042: LOD2
+    100044: LOD2 1
+    100046: LOD2 10
+    100048: LOD2 11
+    100050: LOD2 12
+    100052: LOD2 2
+    100054: LOD2 3
+    100056: LOD2 4
+    100058: LOD2 5
+    100060: LOD2 6
+    100062: LOD2 7
+    100064: LOD2 8
+    100066: LOD2 9
+    100068: LOD3
+    100070: //RootNode
+    100072: Spring
+    100074: Spring 1
+    100076: Steering
+    100078: Suspension Back
+    100080: Suspension Front
+    100082: Wheels
+    400000: BL
+    400002: Bonnet
+    400004: BR
+    400006: Bumper
+    400008: Can
+    400010: Chassis
+    400012: FL
+    400014: FR
+    400016: LOD1
+    400018: LOD1 1
+    400020: LOD1 10
+    400022: LOD1 11
+    400024: LOD1 12
+    400026: LOD1 2
+    400028: LOD1 3
+    400030: LOD1 4
+    400032: LOD1 5
+    400034: LOD1 6
+    400036: LOD1 7
+    400038: LOD1 8
+    400040: LOD1 9
+    400042: LOD2
+    400044: LOD2 1
+    400046: LOD2 10
+    400048: LOD2 11
+    400050: LOD2 12
+    400052: LOD2 2
+    400054: LOD2 3
+    400056: LOD2 4
+    400058: LOD2 5
+    400060: LOD2 6
+    400062: LOD2 7
+    400064: LOD2 8
+    400066: LOD2 9
+    400068: LOD3
+    400070: //RootNode
+    400072: Spring
+    400074: Spring 1
+    400076: Steering
+    400078: Suspension Back
+    400080: Suspension Front
+    400082: Wheels
+    2300000: BL
+    2300002: Bonnet
+    2300004: BR
+    2300006: Bumper
+    2300008: Can
+    2300010: Chassis
+    2300012: FL
+    2300014: FR
+    2300016: LOD1
+    2300018: LOD1 1
+    2300020: LOD1 10
+    2300022: LOD1 11
+    2300024: LOD1 12
+    2300026: LOD1 2
+    2300028: LOD1 3
+    2300030: LOD1 4
+    2300032: LOD1 5
+    2300034: LOD1 6
+    2300036: LOD1 7
+    2300038: LOD1 8
+    2300040: LOD1 9
+    2300042: LOD2
+    2300044: LOD2 1
+    2300046: LOD2 10
+    2300048: LOD2 11
+    2300050: LOD2 12
+    2300052: LOD2 2
+    2300054: LOD2 3
+    2300056: LOD2 4
+    2300058: LOD2 5
+    2300060: LOD2 6
+    2300062: LOD2 7
+    2300064: LOD2 8
+    2300066: LOD2 9
+    2300068: LOD3
+    2300070: Spring
+    2300072: Spring 1
+    2300074: Steering
+    2300076: Suspension Back
+    2300078: Suspension Front
+    3300000: BL
+    3300002: Bonnet
+    3300004: BR
+    3300006: Bumper
+    3300008: Can
+    3300010: Chassis
+    3300012: FL
+    3300014: FR
+    3300016: LOD1
+    3300018: LOD1 1
+    3300020: LOD1 10
+    3300022: LOD1 11
+    3300024: LOD1 12
+    3300026: LOD1 2
+    3300028: LOD1 3
+    3300030: LOD1 4
+    3300032: LOD1 5
+    3300034: LOD1 6
+    3300036: LOD1 7
+    3300038: LOD1 8
+    3300040: LOD1 9
+    3300042: LOD2
+    3300044: LOD2 1
+    3300046: LOD2 10
+    3300048: LOD2 11
+    3300050: LOD2 12
+    3300052: LOD2 2
+    3300054: LOD2 3
+    3300056: LOD2 4
+    3300058: LOD2 5
+    3300060: LOD2 6
+    3300062: LOD2 7
+    3300064: LOD2 8
+    3300066: LOD2 9
+    3300068: LOD3
+    3300070: Spring
+    3300072: Spring 1
+    3300074: Steering
+    3300076: Suspension Back
+    3300078: Suspension Front
+    4300000: Chassis
+    4300002: LOD1
+    4300004: LOD2
+    4300006: Bonnet
+    4300008: LOD1
+    4300010: LOD2
+    4300012: Bumper
+    4300014: LOD1
+    4300016: LOD2
+    4300018: Can
+    4300020: LOD1
+    4300022: LOD2
+    4300024: Steering
+    4300026: LOD1
+    4300028: LOD2
+    4300030: Suspension Front
+    4300032: LOD1
+    4300034: LOD2
+    4300036: Spring
+    4300038: LOD1
+    4300040: LOD2
+    4300042: Suspension Back
+    4300044: LOD1
+    4300046: LOD2
+    4300048: Spring
+    4300050: LOD1
+    4300052: LOD2
+    4300054: FL
+    4300056: LOD1
+    4300058: LOD2
+    4300060: BL
+    4300062: LOD1
+    4300064: LOD2
+    4300066: FR
+    4300068: LOD1
+    4300070: LOD2
+    4300072: BR
+    4300074: LOD1
+    4300076: LOD2
+    4300078: LOD3
+  materials:
+    importMaterials: 1
+    materialName: 1
+    materialSearch: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    motionNodeName: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    importBlendShapes: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    optimizeMeshForGPU: 1
+    keepQuads: 0
+    weldVertices: 1
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+  importAnimation: 1
+  copyAvatar: 0
+  humanDescription:
+    serializedVersion: 2
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    rootMotionBoneName: 
+    rootMotionBoneRotation: {x: 0, y: 0, z: 0, w: 1}
+    hasTranslationDoF: 0
+    hasExtraRoot: 0
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  animationType: 0
+  humanoidOversampling: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
