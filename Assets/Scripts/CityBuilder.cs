@@ -43,6 +43,8 @@ namespace CityDrive
             {
                 Debug.LogError("[CityDrive] New city CIT.obj was not imported under Resources/CityNew.");
                 Bounds = new Bounds(Vector3.zero, new Vector3(300f, 10f, 300f));
+                _city = new GameObject("Emergency driving area (city asset missing)");
+                CreateEmergencySpawn();
                 IsReady = true;
                 yield break;
             }
@@ -57,9 +59,37 @@ namespace CityDrive
             AddColliders();
             yield return null;
             BuildRoadGraph();
+            if (!_hasRoadSpawn) CreateEmergencySpawn();
             SpawnRotation = SpawnRotationForFirstLane();
             ConfigureVisuals();
             IsReady = true;
+        }
+
+        // Last-resort drivable pad: do not strand the player on the menu when
+        // an imported road collider cannot be validated. This is NOT a replacement
+        // for a correctly imported city road; the log identifies the fallback.
+        private void CreateEmergencySpawn()
+        {
+            Vector3 center = new Vector3(Bounds.center.x, Bounds.min.y + 0.5f, Bounds.center.z);
+            if (_roadTransform != null)
+            {
+                Renderer road = _roadTransform.GetComponent<Renderer>();
+                if (road != null) center = new Vector3(road.bounds.center.x, road.bounds.max.y + 0.15f, road.bounds.center.z);
+            }
+            GameObject pad = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pad.name = "Emergency spawn pad (road validation failed)";
+            pad.transform.SetParent(_city.transform, true);
+            pad.transform.position = center;
+            pad.transform.localScale = new Vector3(40f, 0.2f, 40f);
+            // SetParent on scaled city changes local dimensions; set world size.
+            Vector3 parentScale = _city.transform.lossyScale;
+            pad.transform.localScale = new Vector3(40f / Mathf.Max(0.001f, Mathf.Abs(parentScale.x)),
+                0.2f / Mathf.Max(0.001f, Mathf.Abs(parentScale.y)),
+                40f / Mathf.Max(0.001f, Mathf.Abs(parentScale.z)));
+            Physics.SyncTransforms();
+            _roadSpawn = center + Vector3.up * 0.1f;
+            _hasRoadSpawn = true;
+            Debug.LogWarning("[CityDrive] Road validation failed; using temporary emergency driving pad. Traffic may be unavailable.");
         }
 
         private void OrientCity()

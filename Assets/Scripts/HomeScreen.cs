@@ -605,6 +605,8 @@ namespace CityDrive
                 _loading.SetProgress(0.62f, "STARTING ENGINE",
                     "Bringing the drivetrain and cameras online...");
             if (_city != null && _city.Root != null) _city.Root.SetActive(true);
+            VehicleVisuals drivingVisuals = _car.GetComponent<VehicleVisuals>();
+            if (drivingVisuals != null) drivingVisuals.SetSpinEnabled(true);
             _controller.enabled = true;
             _chase.enabled = true;
             if (_camera != null) _camera.enabled = true;

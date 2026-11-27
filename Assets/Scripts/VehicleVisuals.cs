@@ -46,6 +46,13 @@ namespace CityDrive
                 int index = WheelIndex(t.name);
                 if (index < 0) continue;
                 Renderer candidateRenderer = t.GetComponent<Renderer>();
+                // Animating skeletal bones or an offset mesh pivot can pull the
+                // whole tyre away from the vehicle. Animate only safely centred,
+                // independent static wheel meshes; leave uncertain rigs intact.
+                if (!(candidateRenderer is MeshRenderer) || t.GetComponent<MeshFilter>() == null) continue;
+                Bounds wheelBounds = candidateRenderer.bounds;
+                float wheelSize = Mathf.Max(wheelBounds.extents.x, Mathf.Max(wheelBounds.extents.y, wheelBounds.extents.z));
+                if (wheelSize <= 0.001f || Vector3.Distance(t.position, wheelBounds.center) > wheelSize * 0.6f) continue;
                 Renderer currentRenderer = _wheels[index] != null ? _wheels[index].GetComponent<Renderer>() : null;
                 if (_wheels[index] != null && (currentRenderer != null || candidateRenderer == null)) continue;
                 _wheels[index] = t;
