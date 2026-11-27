@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -23,6 +24,7 @@ namespace CityDrive
         private Text _coinsText;
         private Text _pageText;
         private int _page;
+        private Coroutine _thumbnailJob;
 
         public bool IsOpen => _panel != null && _panel.activeSelf;
 
@@ -83,6 +85,7 @@ namespace CityDrive
 
         private void RenderPage()
         {
+            if (_thumbnailJob != null) StopCoroutine(_thumbnailJob);
             for (int i = 0; i < _cards.Count; i++)
             {
                 GameObject card = _cards[i];
@@ -103,11 +106,7 @@ namespace CityDrive
                     ? new Color(0.12f, 0.34f, 0.24f, 0.98f)
                     : new Color(0.09f, 0.13f, 0.20f, 0.98f);
 
-                if (!_thumbnails.TryGetValue(prefab, out Sprite thumbnail) || thumbnail == null)
-                {
-                    thumbnail = RenderThumbnail(prefab);
-                    _thumbnails[prefab] = thumbnail;
-                }
+                _thumbnails.TryGetValue(prefab, out Sprite thumbnail);
                 Image preview = UiTools.MakeImage(card.transform, "Preview",
                     new Vector2(0.02f, 0.24f), new Vector2(0.98f, 0.98f), Color.white, thumbnail);
                 preview.preserveAspect = true;
@@ -122,6 +121,28 @@ namespace CityDrive
 
             int pages = Mathf.Max(1, Mathf.CeilToInt(_prefabs.Count / (float)PageSize));
             if (_pageText != null) _pageText.text = "PAGE " + (_page + 1) + " / " + pages;
+            _thumbnailJob = StartCoroutine(RenderPageThumbnails(_page));
+        }
+
+        private IEnumerator RenderPageThumbnails(int page)
+        {
+            yield return null; // Show the garage before rendering expensive previews.
+            for (int i = 0; i < _cards.Count && page == _page; i++)
+            {
+                int index = page * PageSize + i;
+                if (index >= _prefabs.Count) break;
+                GameObject prefab = _prefabs[index];
+                if (!_thumbnails.TryGetValue(prefab, out Sprite thumbnail) || thumbnail == null)
+                {
+                    try { thumbnail = RenderThumbnail(prefab); }
+                    catch (Exception ex) { Debug.LogWarning("[CityDrive] Garage preview unavailable: " + ex.Message); }
+                    _thumbnails[prefab] = thumbnail;
+                }
+                Transform child = _cards[i].transform.Find("Preview");
+                if (child != null && thumbnail != null) child.GetComponent<Image>().sprite = thumbnail;
+                yield return null;
+            }
+            _thumbnailJob = null;
         }
 
         private static Sprite RenderThumbnail(GameObject prefab)
@@ -218,8 +239,9 @@ namespace CityDrive
             RefreshCoins();
             int pages = Mathf.Max(1, Mathf.CeilToInt(_prefabs.Count / (float)PageSize));
             if (_page >= pages) _page = 0;
-            RenderPage();
             _panel.SetActive(true);
+            _panel.transform.SetAsLastSibling();
+            RenderPage();
         }
 
         public void Close()

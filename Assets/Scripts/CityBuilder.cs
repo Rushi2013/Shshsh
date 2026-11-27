@@ -18,12 +18,17 @@ namespace CityDrive
     {
         private GameObject _city;
         private Transform _roadTransform;
+        private MeshCollider _roadCollider;
+        private bool _hasRoadSpawn;
+        private readonly Dictionary<Material, Material> _cityMaterials = new Dictionary<Material, Material>();
+        private Vector3 _roadSpawn;
         private readonly List<Vector3> _lanes = new List<Vector3>();
         private readonly List<List<int>> _neighbors = new List<List<int>>();
         private int _validEdges;
 
         public Bounds Bounds { get; private set; }
         public bool IsReady { get; private set; }
+        public bool HasSafeSpawn => _hasRoadSpawn;
         public GameObject Root => _city;
         public Quaternion SpawnRotation { get; private set; } = Quaternion.identity;
         public Vector3[] LaneWaypoints => _lanes.ToArray();
@@ -59,27 +64,31 @@ namespace CityDrive
 
         private void OrientCity()
         {
-            Quaternion[] candidates =
-            {
-                Quaternion.identity,
-                Quaternion.Euler(0f, 180f, 0f),
-                Quaternion.Euler(90f, 0f, 0f),
-                Quaternion.Euler(-90f, 0f, 0f)
-            };
-            float best = float.MaxValue;
-            Quaternion chosen = Quaternion.identity;
-            foreach (Quaternion candidate in candidates)
-            {
-                _city.transform.rotation = candidate;
-                Physics.SyncTransforms();
-                Bounds b = ComputeBounds();
-                // Buildings define the vertical axis; the sky plane is ignored later.
-                float score = Mathf.Abs(b.size.y - 60f) * 0.4f + Mathf.Abs(b.size.x - b.size.z) * 0.05f;
-                if (score < best) { best = score; chosen = candidate; }
-            }
-            _city.transform.rotation = chosen;
+            // CIT is Y-up in the source: the roads lie at y≈3 and building
+            // vertices rise above them. Do not score rotations against the sky
+            // billboard's huge bounds: that can turn the whole city on its side.
+            _city.transform.rotation = Quaternion.identity;
             Physics.SyncTransforms();
-            Debug.Log("[CityDrive] New city orientation " + chosen.eulerAngles + " score " + best.ToString("F1"));
+            Transform road = FindRoadSurface();
+            if (road == null) return;
+            float roadY = road.GetComponent<Renderer>().bounds.center.y;
+            int above = 0, below = 0;
+            foreach (Renderer r in _city.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || r.transform == road || IsSky(r.name)) continue;
+                if (r.bounds.center.y > roadY + 1f) above++;
+                if (r.bounds.center.y < roadY - 1f) below++;
+            }
+            if (below > above)
+                _city.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
+            Physics.SyncTransforms();
+            Debug.Log("[CityDrive] City orientation " + _city.transform.rotation.eulerAngles);
+        }
+
+        private static bool IsSky(string name)
+        {
+            string lower = name.ToLowerInvariant();
+            return lower.Contains("skies") || lower.Contains("hdri");
         }
 
         private void ScaleAndGround()
@@ -104,7 +113,7 @@ namespace CityDrive
             Bounds result = new Bounds(Vector3.zero, Vector3.zero);
             foreach (Renderer renderer in renderers)
             {
-                if (renderer == null || renderer.bounds.size == Vector3.zero) continue;
+                if (renderer == null || IsSky(renderer.name) || renderer.bounds.size == Vector3.zero) continue;
                 if (first) { result = renderer.bounds; first = false; }
                 else result.Encapsulate(renderer.bounds);
             }
@@ -118,12 +127,19 @@ namespace CityDrive
         {
             int mesh = 0;
             int skipped = 0;
+            _roadTransform = FindRoadSurface();
+            if (_roadTransform != null) OrientRoadFacesUp(_roadTransform.GetComponent<MeshFilter>());
             foreach (MeshFilter filter in _city.GetComponentsInChildren<MeshFilter>(true))
             {
                 GameObject go = filter.gameObject;
                 string name = go.name.ToLowerInvariant();
                 if (name.Contains("skies") || name.Contains("hdri")) continue; // sky is not ground
-                if (go.GetComponent<Collider>() != null) continue;
+                Collider existing = go.GetComponent<Collider>();
+                if (existing != null)
+                {
+                    if (go.transform == _roadTransform) _roadCollider = existing as MeshCollider;
+                    continue;
+                }
                 Mesh meshAsset = filter.sharedMesh;
                 if (meshAsset == null) continue;
 
@@ -138,10 +154,43 @@ namespace CityDrive
                 MeshCollider collider = go.AddComponent<MeshCollider>();
                 collider.sharedMesh = meshAsset;
                 collider.convex = false;
+                if (go.transform == _roadTransform) _roadCollider = collider;
                 mesh++;
             }
             Debug.Log("[CityDrive] New city colliders: " + mesh + " mesh; skipped " + skipped +
                       " oversized building aggregates.");
+        }
+
+        // The source road contains downward-facing triangles. Unity physics normally
+        // raycasts only front faces, so reverse the road mesh when its winding points
+        // down. Keep all other city geometry and materials intact.
+        private void OrientRoadFacesUp(MeshFilter filter)
+        {
+            if (filter == null || filter.sharedMesh == null || !filter.sharedMesh.isReadable) return;
+            Mesh source = filter.sharedMesh;
+            int[] triangles = source.triangles;
+            Vector3[] vertices = source.vertices;
+            double orientation = 0;
+            for (int i = 0; i + 2 < triangles.Length; i += 3)
+            {
+                Vector3 a = filter.transform.TransformPoint(vertices[triangles[i]]);
+                Vector3 b = filter.transform.TransformPoint(vertices[triangles[i + 1]]);
+                Vector3 c = filter.transform.TransformPoint(vertices[triangles[i + 2]]);
+                orientation += Vector3.Cross(b - a, c - a).y;
+            }
+            if (orientation >= 0) return;
+            Mesh corrected = Instantiate(source);
+            corrected.name = source.name + " (upward road)";
+            for (int sub = 0; sub < corrected.subMeshCount; sub++)
+            {
+                int[] indices = corrected.GetTriangles(sub);
+                for (int i = 0; i + 2 < indices.Length; i += 3)
+                { int temp = indices[i + 1]; indices[i + 1] = indices[i + 2]; indices[i + 2] = temp; }
+                corrected.SetTriangles(indices, sub);
+            }
+            corrected.RecalculateNormals();
+            filter.sharedMesh = corrected;
+            Debug.Log("[CityDrive] Corrected downward-facing road triangles.");
         }
 
         /// <summary>
@@ -178,6 +227,8 @@ namespace CityDrive
                 return;
             }
 
+            Physics.SyncTransforms();
+            FindRoadMeshSpawn();
             TextAsset graph = Resources.Load<TextAsset>("CityNew/RoadGraph");
             if (graph == null)
             {
@@ -185,6 +236,7 @@ namespace CityDrive
                 return;
             }
 
+            Physics.SyncTransforms();
             string[] lines = graph.text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length < 2 || !lines[0].StartsWith("NODES ")) return;
             string[] header = lines[0].Split(' ');
@@ -201,15 +253,33 @@ namespace CityDrive
                 float y = float.Parse(parts[2], CultureInfo.InvariantCulture);
                 float z = float.Parse(parts[3], CultureInfo.InvariantCulture);
                 local[i] = new Vector3(x, y, z);
-                Vector3 world = _roadTransform.TransformPoint(local[i]);
-                valid[i] = HitsRoad(world, out Vector3 surface);
-                if (valid[i])
-                {
-                    // Keep the extracted road height, corrected to the actual collider.
-                    _lanes.Add(new Vector3(world.x, surface.y, world.z));
-                }
-                else _lanes.Add(world); // stable index mapping; node is filtered via valid[]
             }
+
+            // OBJ import can mirror an axis; select the conversion with the most
+            // node hits on the actual road collider rather than assuming one.
+            Vector2[] signs = { new Vector2(1, 1), new Vector2(-1, 1),
+                                new Vector2(1, -1), new Vector2(-1, -1) };
+            int bestHits = -1;
+            Vector2 bestSign = signs[0];
+            foreach (Vector2 sign in signs)
+            {
+                int hits = 0;
+                for (int i = 0; i < nodeCount; i++)
+                {
+                    Vector3 point = new Vector3(local[i].x * sign.x, local[i].y, local[i].z * sign.y);
+                    if (HitsRoad(_roadTransform.TransformPoint(point), out _)) hits++;
+                }
+                if (hits > bestHits) { bestHits = hits; bestSign = sign; }
+            }
+            for (int i = 0; i < nodeCount; i++)
+            {
+                Vector3 point = new Vector3(local[i].x * bestSign.x, local[i].y, local[i].z * bestSign.y);
+                Vector3 world = _roadTransform.TransformPoint(point);
+                valid[i] = HitsRoad(world, out Vector3 surface);
+                _lanes.Add(valid[i] ? surface : world);
+                if (valid[i] && !_hasRoadSpawn) { _roadSpawn = surface; _hasRoadSpawn = true; }
+            }
+            Debug.Log("[CityDrive] Road graph coordinate mapping " + bestSign + ", hits " + bestHits);
 
             for (int i = 0; i < nodeCount; i++) _neighbors.Add(new List<int>());
             int edgeIndex = 1 + nodeCount;
@@ -235,15 +305,30 @@ namespace CityDrive
                       " validated edges on " + _roadTransform.name + ".");
         }
 
+        private void FindRoadMeshSpawn()
+        {
+            if (_roadTransform == null || _roadCollider == null) return;
+            MeshFilter filter = _roadTransform.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null || !filter.sharedMesh.isReadable) return;
+            Vector3[] vertices = filter.sharedMesh.vertices;
+            int[] triangles = filter.sharedMesh.triangles;
+            for (int i = 0; i + 2 < triangles.Length; i += 3)
+            {
+                Vector3 local = (vertices[triangles[i]] + vertices[triangles[i + 1]] + vertices[triangles[i + 2]]) / 3f;
+                if (!HitsRoad(_roadTransform.TransformPoint(local), out Vector3 point)) continue;
+                _roadSpawn = point;
+                _hasRoadSpawn = true;
+                return;
+            }
+        }
+
         private bool HitsRoad(Vector3 world, out Vector3 surface)
         {
             surface = world;
-            if (_roadTransform == null) return false;
+            if (_roadCollider == null) return false;
             Vector3 origin = world + Vector3.up * 30f;
-            if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 80f, ~0, QueryTriggerInteraction.Ignore))
-                return false;
-            Transform t = hit.collider.transform;
-            if (t != _roadTransform && !t.IsChildOf(_roadTransform)) return false;
+            if (!_roadCollider.Raycast(new Ray(origin, Vector3.down), out RaycastHit hit, 80f)) return false;
+            if (hit.normal.y < 0.5f) return false;
             surface = hit.point;
             return true;
         }
@@ -259,10 +344,55 @@ namespace CityDrive
                     renderer.enabled = false; // UniStorm owns the sky
                     continue;
                 }
+                ApplyApproximateCityMaterials(renderer);
                 bool sizeable = renderer.bounds.size.sqrMagnitude > 0.25f;
                 renderer.shadowCastingMode = sizeable ? ShadowCastingMode.On : ShadowCastingMode.Off;
                 renderer.receiveShadows = sizeable;
             }
+        }
+
+        // The supplied MTL has no road/building image links. These are visibly
+        // approximate replacements, not a claim to recover the original mapping.
+        private void ApplyApproximateCityMaterials(Renderer renderer)
+        {
+            Material[] materials = renderer.sharedMaterials;
+            bool changed = false;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material original = materials[i];
+                if (original == null) continue;
+                string id = original.name.ToLowerInvariant();
+                string texture = null;
+                if (id.Contains("material.007") || id.Contains("material.006") || id.Contains("wall"))
+                    texture = "TexturesCom_ConcreteBare0321_1_seamless_S";
+                else if (id.Contains("build3.001")) texture = "TexturesCom_BuildingsHighRise0504_2_M";
+                else if (id.Contains("build3.002")) texture = "TexturesCom_HighRiseResidential0139_1_seamless_S";
+                else if (id.Contains("build3")) texture = "TexturesCom_BuildingsHighRise0368_1_seamless_S";
+                else if (id.Contains("material.004")) texture = "TexturesCom_HighRiseResidential0103_1_seamless_S";
+                if (texture == null) continue;
+                if (!_cityMaterials.TryGetValue(original, out Material replacement))
+                {
+                    Texture2D image = Resources.Load<Texture2D>("CityNew/" + texture);
+                    if (image == null) continue;
+                    Shader shader = Shader.Find("Standard");
+                    if (shader == null) continue;
+                    replacement = new Material(shader) { name = original.name + " (approximate texture)" };
+                    replacement.mainTexture = image;
+                    replacement.color = Color.white;
+                    replacement.SetFloat("_Glossiness", 0.15f);
+                    _cityMaterials.Add(original, replacement);
+                }
+                materials[i] = replacement;
+                changed = true;
+            }
+            if (changed) renderer.sharedMaterials = materials;
+        }
+
+        private void OnDestroy()
+        {
+            foreach (Material material in _cityMaterials.Values)
+                if (material != null) Destroy(material);
+            _cityMaterials.Clear();
         }
 
         public Vector3 FindSpawnPoint()
@@ -272,7 +402,8 @@ namespace CityDrive
                 if (_neighbors[i].Count == 0) continue;
                 return _lanes[i] + Vector3.up * 1.1f;
             }
-            Debug.LogError("[CityDrive] No validated road node for player spawn.");
+            if (_hasRoadSpawn) return _roadSpawn + Vector3.up * 1.1f;
+            Debug.LogError("[CityDrive] No validated road node for player spawn. Check road collider/import.");
             return Vector3.up * 2f;
         }
 

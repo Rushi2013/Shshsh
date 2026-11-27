@@ -556,6 +556,12 @@ namespace CityDrive
         public void Play()
         {
             if (_playing) return;
+            if (_city == null || !_city.HasSafeSpawn)
+            {
+                if (_carNameText != null) _carNameText.text = "CITY ROAD NOT READY - RESTART GAME";
+                Debug.LogError("[CityDrive] Cannot start: no verified road collider/spawn.");
+                return;
+            }
             _playing = true;
             ClosePanels();
             StartCoroutine(StartGameplay());
@@ -578,6 +584,9 @@ namespace CityDrive
             if (_loading != null)
                 _loading.SetProgress(0.34f, "LOADING CITY AND CAR MODEL",
                     "Placing the selected car on the city road...");
+            // Restore city colliders before enabling gravity on the player.
+            if (_city != null && _city.Root != null) _city.Root.SetActive(true);
+            Physics.SyncTransforms();
             Rigidbody body = _car.GetComponent<Rigidbody>();
             if (body != null)
             {

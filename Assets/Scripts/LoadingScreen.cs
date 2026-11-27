@@ -74,9 +74,9 @@ namespace CityDrive
                 new Color(0f, 0f, 0f, 0.72f)).rectTransform;
             _fill = UiTools.MakeImage(track, "Progress Fill", Vector2.zero, Vector2.one,
                 new Color(1f, 0.78f, 0.12f, 1f));
-            _fill.type = Image.Type.Filled;
-            _fill.fillMethod = Image.FillMethod.Horizontal;
-            _fill.fillAmount = 0f;
+            // A sprite-less Image cannot reliably use Filled; resize the solid bar itself.
+            _fill.type = Image.Type.Simple;
+            _fill.rectTransform.anchorMax = new Vector2(0f, 1f);
 
             _percentage = UiTools.MakeText(_canvasObject.transform, "Percentage", "0%", 44,
                 new Vector2(0.16f, 0.34f), new Vector2(0.84f, 0.43f), TextAnchor.MiddleRight,
@@ -132,7 +132,8 @@ namespace CityDrive
             if (_displayProgress < _targetProgress)
                 _displayProgress = Mathf.MoveTowards(_displayProgress, _targetProgress,
                     Time.unscaledDeltaTime * 1.4f);
-            if (_fill != null) _fill.fillAmount = _displayProgress;
+            if (_fill != null)
+                _fill.rectTransform.anchorMax = new Vector2(_displayProgress, 1f);
             if (_percentage != null)
                 _percentage.text = Mathf.RoundToInt(_displayProgress * 100f) + "%";
         }
